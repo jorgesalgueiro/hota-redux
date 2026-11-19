@@ -85,6 +85,7 @@ int fastest_flag = 0;
 int check_keys_flag = 0;
 int skip_password_flag = 1;
 int integer_scale_flag = -1; /* -1 = use video.cfg, 0/1 = command line */
+int last_level = 0; /* last playable room, for restarting after game over */
 
 short task_pc[64];
 short new_task_pc[64];
@@ -539,6 +540,8 @@ void quickload()
 		fclose(fp);
 		return;
 	}
+
+	last_level = current_room;
 
 	/* Drop every old buffer, then put the saved backdrop back. */
 	screen_clear_all();
@@ -1212,6 +1215,12 @@ static void run()
 
 		if (next_script != 0)
 		{
+			if (next_script >= 1 && next_script <= 8)
+			{
+				/* remember the level so a game over can restart it */
+				last_level = next_script;
+			}
+
 			current_room = next_script;
 			current_backdrop = 0;
 			reset_sprite_list();
@@ -1455,7 +1464,7 @@ static void help()
 	puts("\t--no-sound     disable music and sound effects");
 	puts("\t--music-volume n  music volume 0-100 (default: 100)");
 	puts("\t--sfx-volume n    sound effects volume 0-100 (default: 100)");
-	puts("\t--skip-password   skip the code entry screen (default)");
+	puts("\t--skip-password   skip code entry; restart the level after game over (default)");
 	puts("\t--no-skip-password show the original code entry screen");
 	puts("\t--room n       start from room <n>");
 	puts("\t--iso prefix   use ISO image <prefix.iso>");

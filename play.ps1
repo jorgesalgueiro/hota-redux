@@ -1,5 +1,5 @@
 # =====================================================================
-#  Heart of The Alien Redux 2.0.4 - setup / configuration screen
+#  Heart of The Alien Redux 2.0.5 - setup / configuration screen
 #
 #  A small BIOS/DOS-style menu for the Windows launcher. It shows the
 #  current options next to their defaults, lets the player change them
@@ -165,7 +165,7 @@ $script:fields = @(
     [pscustomobject]@{
         Key = 'skippassword'; Label = 'Skip password'; Kind = 'choice'
         Values = @('off', 'on'); Names = @('No', 'Yes')
-        Help = 'Normal flow: skip the code-entry screen after the intro and start room 1'
+        Help = 'Yes: start level 1 after the intro and restart your level after a game over'
     }
 )
 
@@ -560,7 +560,7 @@ function Show-Menu {
     Clear-Host
 
     Write-Host $line -ForegroundColor DarkCyan
-    Write-Host ('| {0,-76} |' -f ' HEART OF THE ALIEN REDUX 2.0.4  -  SETUP / CONFIGURATION') -ForegroundColor White
+    Write-Host ('| {0,-76} |' -f ' HEART OF THE ALIEN REDUX 2.0.5  -  SETUP / CONFIGURATION') -ForegroundColor White
     Write-Host $line -ForegroundColor DarkCyan
 
     Write-Host ('  {0,-2} {1,-26} {2,-21} {3,-21}' -f '', 'OPTION', 'CURRENT', 'DEFAULT') -ForegroundColor DarkGray

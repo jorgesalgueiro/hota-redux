@@ -1,4 +1,4 @@
-# Heart of The Alien Redux 2.0.4
+# Heart of The Alien Redux 2.0.5
 
 [![shot1](res/thumb1.png)](res/shot1.png)
 [![shot2](res/thumb2.png)](res/shot2.png)
@@ -13,10 +13,11 @@ high-resolution OpenGL renderer, adjustable pixel-art smoothing, user
 configurable key bindings and a Windows release. **2.0.2** added the DOS/BIOS
 style setup screen, UTF-8 paths and a start/select key. **2.0.3** improved
 input precision, skipped the password screen by default, fixed the game-over
-Start path and hardened the decoders. **2.0.4** adds gamepad support, volume
+Start path and hardened the decoders. **2.0.4** added gamepad support, volume
 and mute, pause on focus loss, a cross-platform launcher, integer scaling and
-remembered window size. It was made by **Jorge Salgueiro** with the help of
-**opencode** and **DeepSeek**.
+remembered window size. **2.0.5** skips the password screen after a game over
+and restarts the level you were playing. It was made by **Jorge Salgueiro**
+with the help of **opencode** and **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
 > provide its ISO image (and optionally the CD music) yourself. Game data is
@@ -38,7 +39,7 @@ PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
 to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
 I faced some problems, so I started fixing and polishing. One thing led to
-another, and this 2.0.1 / 2.0.4 fork is the result: the same game and the same
+another, and this 2.0.1 / 2.0.5 fork is the result: the same game and the same
 Redux engine, with a sharper picture, a documented key binding file, and some
 crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
@@ -85,9 +86,10 @@ Alien* itself remains the work of its original creators — see
   before.
 - **Unicode paths.** On Windows the ISO, music tracks and key file can live
   in folders with accents or any other non-ASCII characters.
-- **No password needed.** After the intro the game starts level 1 directly.
-  The original code-entry screen is still available with
-  `--no-skip-password` or from the setup screen.
+- **No password needed.** After the intro the game starts level 1 directly,
+  and after a game over Start restarts the level you were playing. The
+  original code-entry screen is still available with `--no-skip-password`
+  or from the setup screen.
 - **Gamepad support.** Hot-plugged SDL3 controllers work out of the box
   (D-pad/stick, A/B/C, Start, quicksave/quickload shoulders).
 - **Volume and mute.** Set music/SFX levels with `--music-volume` and
@@ -107,7 +109,7 @@ Alien* itself remains the work of its original creators — see
   (see the [changelog](#changelog)).
 - **Bounds checking** for corrupt or unexpected sprite, save and path data, so
   a bad file gives a warning instead of a crash.
-- **Regression suite.** `tests/run-tests.ps1` runs 43 headless scenarios
+- **Regression suite.** `tests/run-tests.ps1` runs 45 headless scenarios
   (startup, every room, every upscaler, HD and SDL renderers, key binding
   parsing, recorded playthroughs) and `tests/run-asan.sh` runs the same kind
   of checks under AddressSanitizer/UBSan on Linux.
@@ -127,7 +129,7 @@ Alien* itself remains the work of its original creators — see
 
 ### The easy way (Windows release zip)
 
-1. Unpack `hota-redux-2.0.4-win64.zip` into a folder of your choice.
+1. Unpack `hota-redux-2.0.5-win64.zip` into a folder of your choice.
 2. Put your game data next to `alien.exe`, keeping the original names:
 
    ```
@@ -193,8 +195,9 @@ alien.exe --iso
 ```
 
 With no arguments the game plays the introduction and then starts level 1
-directly. The original code-entry screen is a level selector; use
-`--no-skip-password` to show it instead. The default ISO prefix is
+directly. After a game over, Start restarts the level that was being played.
+The original code-entry screen is a level selector; use `--no-skip-password`
+to show it instead. The default ISO prefix is
 `Heart Of The Alien (U)`, and the default music prefix follows the ISO prefix.
 The level 1 password is `BDXF`.
 
@@ -245,8 +248,8 @@ next to the game. Delete that file to return to automatic sizing. An explicit
 | Flag | What it does |
 | --- | --- |
 | `--fastest` | Disable the speed throttle (mainly for tests and recording playback). |
-| `--skip-password` | After the intro, start level 1 directly instead of showing the code-entry screen. **Default.** |
-| `--no-skip-password` | Show the original code-entry/level-select screen after the intro. |
+| `--skip-password` | After the intro, start level 1 directly instead of showing the code-entry screen; after a game over, Start restarts the level you were playing. **Default.** |
+| `--no-skip-password` | Show the original code-entry/level-select screen after the intro and after a game over. |
 | `--music-volume n` | Music volume, `0`–`100` (default `100`). |
 | `--sfx-volume n` | Sound-effect volume, `0`–`100` (default `100`). |
 | `--no-sound` | Disable music and sound effects entirely. |
@@ -363,11 +366,11 @@ CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged with
 
 ## Tests
 
-- `tests/run-tests.ps1` — headless Windows suite: 43 checks covering option
+- `tests/run-tests.ps1` - headless Windows suite: 45 checks covering option
   validation, the intro, every room, every upscaler, both renderers, the key
   binding parser and recorded playthroughs. Game data is expected at
   `tests/work/game.iso`.
-- `tests/run-tests-linux.sh` — headless Linux suite: 37 checks covering the
+- `tests/run-tests-linux.sh` - headless Linux suite: 39 checks covering the
   same ground plus UTF-8 paths and both launchers.
 - `tests/run-asan.sh` — the same idea under AddressSanitizer and UBSan in WSL,
   using the `dummy` SDL video and audio drivers.
@@ -447,7 +450,7 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Lior Halphon** — author of the **Omniscale** pixel-art shader (MIT), and
   **hunterk** for the RetroArch GLSL port used in `src/omniscale_shader.h`.
 
-### This 2.0.1 / 2.0.4 fork
+### This 2.0.1 / 2.0.5 fork
 
 - **Jorge Salgueiro** — SDL3/OpenGL HD renderer, adjustable Omniscale
   smoothing, key binding system, renderer/screenshot fixes, the bug fixes
@@ -482,6 +485,13 @@ included in this repository.
 - *Another World* by Éric Chahi: <https://www.anotherworld.fr/>
 
 ## Changelog
+
+### 2.0.5
+
+- Changed: with **Skip password** on (the default), Start on the game-over
+  screen restarts the level you were playing instead of opening the
+  code-entry screen; `--no-skip-password` restores the level-select screen
+- Tests: 45 checks on Windows and 39 on Linux (Ubuntu 24.04)
 
 ### 2.0.4
 

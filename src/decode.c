@@ -40,6 +40,8 @@ extern short auxvars[];
 extern int current_room;
 extern int next_script;
 extern char first_sprite, last_sprite, sprite_count;
+extern int skip_password_flag;
+extern int last_level;
 
 extern short task_pc[64];
 extern short new_task_pc[64];
@@ -2022,9 +2024,19 @@ int decode(int current_task, int start_pc)
 				}
 				else if (next_script == 9)
 				{
-					/* leaving the game-over screen with Start
-					 * returns to the password selection screen */
-					next_script = 7;
+					/* Leaving the game-over screen with Start
+					 * returns to the password selection screen.
+					 * When passwords are skipped, restart the
+					 * level that was being played instead. */
+					if (skip_password_flag &&
+						last_level >= 1 && last_level <= 8)
+					{
+						next_script = last_level;
+					}
+					else
+					{
+						next_script = 7;
+					}
 					leave = 1;
 				}
 

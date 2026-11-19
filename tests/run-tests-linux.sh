@@ -110,6 +110,23 @@ for spec in level1:1 level2:2 boss:7 gameover-start:1; do
         --iso "$ISO_PREFIX" --room "$room" --replay --fastest --no-sound
 done
 
+cp "$REPO/tests/recorded-keys.gameover-start" "$WORK/recorded-keys"
+check game-over-restart "$REPLAY_SECONDS" run \
+    --iso "$ISO_PREFIX" --room 1 --replay --fastest --no-sound --debug
+if [ "$(grep -c 'loading room 1' "$WORK/game-over-restart.log")" -lt 2 ]; then
+    echo "FAIL game-over-restart (level was not restarted)"
+    failures=$((failures + 1))
+    passes=$((passes - 1))
+fi
+
+check game-over-password "$REPLAY_SECONDS" run \
+    --iso "$ISO_PREFIX" --room 1 --replay --fastest --no-sound --debug --no-skip-password
+if ! grep -q 'loading room 7' "$WORK/game-over-password.log"; then
+    echo "FAIL game-over-password (password screen was not loaded)"
+    failures=$((failures + 1))
+    passes=$((passes - 1))
+fi
+
 mkdir -p "$WORK/Coração"
 if [ ! -f "$WORK/Coração/Coração.iso" ]; then
     ln "$ISO_PREFIX.iso" "$WORK/Coração/Coração.iso" 2>/dev/null ||
