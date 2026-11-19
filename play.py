@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Heart of The Alien Redux 2.0.3 - cross-platform launcher
+Heart of The Alien Redux 2.0.4 - cross-platform launcher
 
 A small text setup screen that works on Linux, macOS and Windows.
 It reads and writes the same play.cfg as play.ps1.
@@ -240,7 +240,7 @@ def build_args(cfg, extra):
 def show_menu(cfg, message):
     clear_screen()
     print("+" + "-" * LINE + "+")
-    print("| " + "HEART OF THE ALIEN REDUX 2.0.3 - SETUP / CONFIGURATION".ljust(LINE - 1) + "|")
+    print("| " + "HEART OF THE ALIEN REDUX 2.0.4 - SETUP / CONFIGURATION".ljust(LINE - 1) + "|")
     print("| " + "Options are saved in play.cfg. Enter a number to change it.".ljust(LINE - 1) + "|")
     print("+" + "-" * LINE + "+")
     print("   %-26s %-21s %-21s" % ("OPTION", "CURRENT", "DEFAULT"))

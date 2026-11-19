@@ -1,4 +1,4 @@
-# Heart of The Alien Redux 2.0.3
+# Heart of The Alien Redux 2.0.4
 
 [![shot1](res/thumb1.png)](res/shot1.png)
 [![shot2](res/thumb2.png)](res/shot2.png)
@@ -11,10 +11,12 @@ Alien Redux**, the 2004 reimplementation by **Gil Megidish**, which was later
 updated to SDL3 for the **2.0.0** release. The **2.0.1** work here added a
 high-resolution OpenGL renderer, adjustable pixel-art smoothing, user
 configurable key bindings and a Windows release. **2.0.2** added the DOS/BIOS
-style setup screen, UTF-8 paths and a start/select key. **2.0.3** improves
-input precision, skips the password screen by default, fixes the game-over
-Start path and hardens the decoders. It was made by **Jorge Salgueiro** with
-the help of **opencode** and **DeepSeek**.
+style setup screen, UTF-8 paths and a start/select key. **2.0.3** improved
+input precision, skipped the password screen by default, fixed the game-over
+Start path and hardened the decoders. **2.0.4** adds gamepad support, volume
+and mute, pause on focus loss, a cross-platform launcher, integer scaling and
+remembered window size. It was made by **Jorge Salgueiro** with the help of
+**opencode** and **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
 > provide its ISO image (and optionally the CD music) yourself. Game data is
@@ -36,7 +38,7 @@ PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
 to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
 I faced some problems, so I started fixing and polishing. One thing led to
-another, and this 2.0.1 / 2.0.3 fork is the result: the same game and the same
+another, and this 2.0.1 / 2.0.4 fork is the result: the same game and the same
 Redux engine, with a sharper picture, a documented key binding file, and some
 crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
@@ -125,7 +127,7 @@ Alien* itself remains the work of its original creators — see
 
 ### The easy way (Windows release zip)
 
-1. Unpack `hota-redux-2.0.3-win64.zip` into a folder of your choice.
+1. Unpack `hota-redux-2.0.4-win64.zip` into a folder of your choice.
 2. Put your game data next to `alien.exe`, keeping the original names:
 
    ```
@@ -445,7 +447,7 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Lior Halphon** — author of the **Omniscale** pixel-art shader (MIT), and
   **hunterk** for the RetroArch GLSL port used in `src/omniscale_shader.h`.
 
-### This 2.0.1 / 2.0.3 fork
+### This 2.0.1 / 2.0.4 fork
 
 - **Jorge Salgueiro** — SDL3/OpenGL HD renderer, adjustable Omniscale
   smoothing, key binding system, renderer/screenshot fixes, the bug fixes
@@ -481,7 +483,7 @@ included in this repository.
 
 ## Changelog
 
-### Unreleased
+### 2.0.4
 
 - Added: SDL3 gamepad support (D-pad/left stick, A/B/C, Start, hot-plug,
   shoulders for quicksave/quickload)
@@ -496,6 +498,7 @@ included in this repository.
   Ubuntu 24.04 with a local SDL3 build
 - Added: pixel-perfect integer scaling (`--integer-scale`, <kbd>I</kbd>)
 - Added: remembered window size and scaling mode in `video.cfg`
+- Tests: 43 checks on Windows and 37 on Linux (Ubuntu 24.04)
 
 ### 2.0.3
 
