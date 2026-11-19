@@ -16,8 +16,8 @@ input precision, skipped the password screen by default, fixed the game-over
 Start path and hardened the decoders. **2.0.4** added gamepad support, volume
 and mute, pause on focus loss, a cross-platform launcher, integer scaling and
 remembered window size. **2.0.5** skips the password screen after a game over
-and restarts the level you were playing. It was made by **Jorge Salgueiro**
-with the help of **opencode** and **DeepSeek**.
+and restarts the level you were playing. 
+It was made with the help of **opencode** and **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
 > provide its ISO image (and optionally the CD music) yourself. Game data is
