@@ -27,19 +27,15 @@ I am a long-time *Another World* fan. *Another World* is one of those games
 that stays with you: the art, the silence, the way the story is told without a
 single word. For years I had heard that *Heart of the Alien* continued the story
 directly where *Another World* ended, with you playing Buddy, the alien friend
-from the first game — but it was only ever released on the Sega CD in North
-America, so I never got to try it.
+from the first game — but I never got to try it.
 
 When I finally found the ISO, I went looking for a way to play it on a modern
 PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
-to the **2.0.0** SDL3 port. Both are wonderful pieces of work, but on today's
-displays the picture still had rough edges: the HD picture could look soft or
-blurry, straight diagonal lines visibly "wobbled" because every source pixel
-became a big staircase step, and the controls were fixed at compile time.
+to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
-So I started fixing and polishing. One thing led to another, and this 2.0.1
+I faced some problems, so I started fixing and polishing. One thing led to another, and this 2.0.1
 fork is the result: the same game and the same Redux engine, with a sharper
-picture, a documented key binding file, and a pile of crashes and glitches
+picture, a documented key binding file, and some crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
 and this README were written together with **opencode** (the coding agent) and
 **DeepSeek** (the model behind it) as an AI pair-programmer. *Heart of the
