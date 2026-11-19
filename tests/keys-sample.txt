@@ -5,3 +5,5 @@ quit = f10
 screenshot = f9
 move up = enter
 move down =
+start = kpenter
+filter = not-a-key

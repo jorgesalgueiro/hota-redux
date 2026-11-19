@@ -442,6 +442,33 @@ void render(unsigned char *src)
 	SDL_RenderPresent(renderer);
 }
 
+/** Shows a black frame.
+
+    Used while a room is being loaded, so the last frame of the previous
+    room is not left on screen. Without this the password/continue screen
+    from the previous room can flash for a moment when the next room
+    starts (for example when entering the first level).
+*/
+void render_blank()
+{
+	if (use_gl)
+	{
+		gl_render_blank();
+		return;
+	}
+
+	if (renderer == NULL)
+	{
+		return;
+	}
+
+	/* Clear the actual window; the palette index zero is not guaranteed
+	 * to be black, so do not reuse the indexed framebuffer here. */
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	SDL_RenderClear(renderer);
+	SDL_RenderPresent(renderer);
+}
+
 /** Module initializer
     @returns zero on success
 */

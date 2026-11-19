@@ -45,6 +45,7 @@ static short scroll_reg = 0;
 */
 void fill_screen(int dest, char color)
 {
+	(void)dest;
 	memset((void *)selected_screen_ptr, color, 304*192);
 }
 
@@ -223,6 +224,18 @@ int get_selected_screen()
 char *get_selected_screen_ptr()
 {
 	return selected_screen_ptr;
+}
+
+/** Clears every virtual screen buffer.
+*/
+void screen_clear_all(void)
+{
+	memset(huge_buf, 0, sizeof(huge_buf));
+	scroll_reg = 0;
+
+	screen_visible = get_screen_ptr(3);
+	screen_invisible = get_screen_ptr(1);
+	select_screen(0xfe);
 }
 
 /** Initializes screen module

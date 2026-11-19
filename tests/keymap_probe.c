@@ -42,9 +42,14 @@ int main(int argc, char **argv)
 		expect("a = action a", keymap_matches(KM_A, SDLK_A, 0), 1);
 		expect("s = action b", keymap_matches(KM_B, SDLK_S, 0), 1);
 		expect("f5 = quicksave", keymap_matches(KM_QUICKSAVE, SDLK_F5, 0), 1);
+		expect("f5 key-up matches without modifiers",
+			keymap_matches_key(KM_QUICKSAVE, SDLK_F5), 1);
 		expect("f7 = quickload", keymap_matches(KM_QUICKLOAD, SDLK_F7, 0), 1);
 		expect("space = speed", keymap_matches(KM_SPEED, SDLK_SPACE, 0), 1);
 		expect("q = reset", keymap_matches(KM_RESET, SDLK_Q, 0), 1);
+		expect("return = start", keymap_matches(KM_START, SDLK_RETURN, 0), 1);
+		expect("keypad enter = start",
+			keymap_matches(KM_START, SDLK_KP_ENTER, 0), 1);
 		expect("alt+return = fullscreen",
 			keymap_matches(KM_FULLSCREEN, SDLK_RETURN, SDL_KMOD_ALT), 1);
 		expect("return alone != fullscreen",
@@ -61,9 +66,14 @@ int main(int argc, char **argv)
 		expect("ctrl+s = quicksave",
 			keymap_matches(KM_QUICKSAVE, SDLK_S, SDL_KMOD_CTRL), 1);
 		expect("s alone != quicksave", keymap_matches(KM_QUICKSAVE, SDLK_S, 0), 0);
+		expect("s key-up matches without ctrl",
+			keymap_matches_key(KM_QUICKSAVE, SDLK_S), 1);
 		expect("enter = move up", keymap_matches(KM_UP, SDLK_RETURN, 0), 1);
 		expect("up != move up", keymap_matches(KM_UP, SDLK_UP, 0), 0);
 		expect("no move down binding", keymap_matches(KM_DOWN, SDLK_DOWN, 0), 0);
+		expect("kpenter = start", keymap_matches(KM_START, SDLK_KP_ENTER, 0), 1);
+		expect("invalid filter line keeps default",
+			keymap_matches(KM_FILTER, SDLK_F, 0), 1);
 	}
 
 	printf("%d failure(s)\n", failures);

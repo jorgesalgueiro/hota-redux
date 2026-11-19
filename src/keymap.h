@@ -25,6 +25,7 @@ typedef enum
 	KM_A,
 	KM_B,
 	KM_C,
+	KM_START,
 	KM_QUICKSAVE,
 	KM_QUICKLOAD,
 	KM_SCREENSHOT,
@@ -46,6 +47,10 @@ int keymap_init(const char *filename);
 
 /** Checks whether a key event matches an action's binding. */
 int keymap_matches(keymap_action action, SDL_Keycode key, SDL_Keymod mod);
+
+/** Checks only the key code, ignoring modifiers. Used for key-up events,
+    where the modifiers may already have been released. */
+int keymap_matches_key(keymap_action action, SDL_Keycode key);
 
 /** Human readable name of an action ("move up", "screenshot", ...). */
 const char *keymap_action_name(keymap_action action);

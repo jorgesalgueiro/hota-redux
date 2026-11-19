@@ -56,6 +56,10 @@ void gl_render_frame(const unsigned char *indices, int pitch,
 	(void)height;
 }
 
+void gl_render_blank(void)
+{
+}
+
 #else /* HAVE_OPENGL */
 
 #ifndef APIENTRY
@@ -589,6 +593,32 @@ void gl_render_frame(const unsigned char *indices, int pitch,
 		capture_screenshot(program, view_x, view_y, view_w, view_h);
 	}
 
+	SDL_GL_SwapWindow(gl_window);
+}
+
+void gl_render_blank(void)
+{
+	int win_w = 0, win_h = 0;
+
+	if (gl_window == NULL || gl_context == NULL)
+	{
+		return;
+	}
+
+	if (!SDL_GetWindowSizeInPixels(gl_window, &win_w, &win_h) ||
+		win_w <= 0 || win_h <= 0)
+	{
+		return;
+	}
+
+	if (p_glBindFramebuffer != NULL)
+	{
+		p_glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	}
+
+	glViewport(0, 0, win_w, win_h);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT);
 	SDL_GL_SwapWindow(gl_window);
 }
 

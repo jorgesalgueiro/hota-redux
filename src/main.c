@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <memory.h>
+#include <limits.h>
 #include <assert.h>
 #include <SDL3/SDL.h>
 #include <SDL3_mixer/SDL_mixer.h>
@@ -40,6 +41,7 @@
 #include "game2bin.h"
 #include "animation.h"
 #include "keymap.h"
+#include "platform.h"
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
@@ -88,7 +90,14 @@ short enabled_tasks[64];
 short new_enabled_tasks[64];
 
 static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_select;
-static int key_reset_record;
+
+/* An action can have several physical keys bound to it. These counters
+ * keep the action pressed until every one of them is released; a plain
+ * boolean would stop walking when the player lets go of just one of the
+ * keys (for example A while Z is still held). */
+static int held_up, held_down, held_left, held_right;
+static int held_a, held_b, held_c, held_start, held_reset;
+static int reset_requested = 0;
 
 static Uint64 last_tick = 0, last_tick_fp = 0;
 
@@ -398,7 +407,13 @@ void quickload()
 	long file_size;
 	FILE *fp;
 
-	fp = fopen(QUICKSAVE_FILENAME, "rb");
+	/* the recorded key stream should not lose the frames before the load */
+	if (record_flag)
+	{
+		flush_recorded_keys();
+	}
+
+	fp = hota_fopen(QUICKSAVE_FILENAME, "rb");
 	if (fp == NULL)
 	{
 		perror("failed to load 'quicksave' file\n");
@@ -432,6 +447,9 @@ void quickload()
 		fclose(fp);
 		return;
 	}
+
+	/* Drop every old buffer, then put the saved backdrop back. */
+	screen_clear_all();
 
 	if (load_room(current_room) < 0 ||
 		load_room_screen(0, current_backdrop) < 0)
@@ -487,7 +505,12 @@ void quicksave()
 	int i, j;
 	FILE *fp;
 
-	fp = fopen(QUICKSAVE_FILENAME, "wb");
+	if (record_flag)
+	{
+		flush_recorded_keys();
+	}
+
+	fp = hota_fopen(QUICKSAVE_FILENAME, "wb");
 	if (fp == NULL)
 	{
 		perror("failed to create 'quicksave' file\n");
@@ -535,6 +558,22 @@ void quicksave()
 	fclose(fp);
 }
 
+/** Releases every game key.
+
+    Called when the window loses focus: the key-up events for keys that
+    were held at that moment are delivered to another window, so without
+    this the character would keep walking after alt-tabbing back.
+*/
+static void release_all_keys()
+{
+	key_up = key_down = key_left = key_right = 0;
+	key_a = key_b = key_c = key_select = 0;
+	held_up = held_down = held_left = held_right = 0;
+	held_a = held_b = held_c = held_start = held_reset = 0;
+	reset_requested = 0;
+	speed_throttle = 0;
+}
+
 /** Processes SDL events
 
     This processes windows messages, keyboard pressed, joystick moves,
@@ -549,40 +588,53 @@ void check_events()
 	        switch (event.type) 
 		{
 			case SDL_EVENT_KEY_UP:
-			if (keymap_matches(KM_RIGHT, event.key.key, event.key.mod))
+			/* Ignore modifiers here: the player may release Ctrl or
+			 * Alt before releasing the bound key. */
+			if (keymap_matches_key(KM_RIGHT, event.key.key))
 			{
-				key_right = 0;
+				if (held_right > 0) held_right--;
+				key_right = held_right > 0;
 			}
-			if (keymap_matches(KM_LEFT, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_LEFT, event.key.key))
 			{
-				key_left = 0;
+				if (held_left > 0) held_left--;
+				key_left = held_left > 0;
 			}
-			if (keymap_matches(KM_UP, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_UP, event.key.key))
 			{
-				key_up = 0;
+				if (held_up > 0) held_up--;
+				key_up = held_up > 0;
 			}
-			if (keymap_matches(KM_DOWN, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_DOWN, event.key.key))
 			{
-				key_down = 0;
+				if (held_down > 0) held_down--;
+				key_down = held_down > 0;
 			}
-			if (keymap_matches(KM_A, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_A, event.key.key))
 			{
-				key_a = 0;
+				if (held_a > 0) held_a--;
+				key_a = held_a > 0;
 			}
-			if (keymap_matches(KM_B, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_B, event.key.key))
 			{
-				key_b = 0;
+				if (held_b > 0) held_b--;
+				key_b = held_b > 0;
 			}
-			if (keymap_matches(KM_C, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_C, event.key.key))
 			{
-				key_c = 0;
+				if (held_c > 0) held_c--;
+				key_c = held_c > 0;
 			}
-			if (keymap_matches(KM_RESET, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_START, event.key.key))
 			{
-				key_a = 0;
-				key_reset_record = 0;
+				if (held_start > 0) held_start--;
+				key_select = held_start > 0;
 			}
-			if (keymap_matches(KM_SPEED, event.key.key, event.key.mod))
+			if (keymap_matches_key(KM_RESET, event.key.key))
+			{
+				if (held_reset > 0) held_reset--;
+			}
+			if (keymap_matches_key(KM_SPEED, event.key.key))
 			{
 				speed_throttle = 0;
 			}
@@ -632,31 +684,55 @@ void check_events()
 
 			if (keymap_matches(KM_RIGHT, event.key.key, event.key.mod))
 			{
+				held_right++;
 				key_right = 1;
 			}
 			if (keymap_matches(KM_LEFT, event.key.key, event.key.mod))
 			{
+				held_left++;
 				key_left = 1;
 			}
 			if (keymap_matches(KM_UP, event.key.key, event.key.mod))
 			{
+				held_up++;
 				key_up = 1;
 			}
 			if (keymap_matches(KM_DOWN, event.key.key, event.key.mod))
 			{
+				held_down++;
 				key_down = 1;
 			}
 			if (keymap_matches(KM_A, event.key.key, event.key.mod))
 			{
+				held_a++;
 				key_a = 1;
+				if (held_reset > 0)
+				{
+					reset_requested = 1;
+				}
 			}
 			if (keymap_matches(KM_B, event.key.key, event.key.mod))
 			{
+				held_b++;
 				key_b = 1;
 			}
 			if (keymap_matches(KM_C, event.key.key, event.key.mod))
 			{
+				held_c++;
 				key_c = 1;
+			}
+			if (keymap_matches(KM_START, event.key.key, event.key.mod))
+			{
+				held_start++;
+				key_select = 1;
+			}
+			if (keymap_matches(KM_RESET, event.key.key, event.key.mod))
+			{
+				held_reset++;
+				if (held_a > 0)
+				{
+					reset_requested = 1;
+				}
 			}
 			if (keymap_matches(KM_QUICKSAVE, event.key.key, event.key.mod))
 			{
@@ -678,11 +754,6 @@ void check_events()
 			{
 				speed_throttle = 1;
 			}
-			if (keymap_matches(KM_RESET, event.key.key, event.key.mod))
-			{
-				key_a = 1;
-				key_reset_record = 1;
-			}
 			if (keymap_matches(KM_UPSCALE, event.key.key, event.key.mod))
 			{
 				toggle_upscale();
@@ -703,6 +774,16 @@ void check_events()
 
 		case SDL_EVENT_QUIT:
 			cls.quit = 1;
+			break;
+
+		case SDL_EVENT_WINDOW_FOCUS_LOST:
+		case SDL_EVENT_WINDOW_MINIMIZED:
+			/* key-up events go to the other window, so forget any
+			 * key that is still held */
+			release_all_keys();
+			break;
+
+		default:
 			break;
 		}
 	}
@@ -839,12 +920,31 @@ static void run()
 			current_room = next_script;
 			reset_sprite_list();
 			init_tasks();
+
+			/* Do not leave the last frame of the previous room on
+			 * screen while the new room is read and unpacked. The
+			 * password/continue screen in particular used to stay
+			 * visible for a moment when the first level started. */
+			screen_clear_all();
+			render_blank();
+
 			LOG(("loading room %d\n", current_room));
 			load_room(current_room);
 			next_script = 0;
 		}
 
 		check_events();
+
+		if (reset_requested)
+		{
+			reset_requested = 0;
+			if (current_room >= 1 && current_room <= 8)
+			{
+				/* reload the current room, as if the level was
+				 * restarted from the continue screen */
+				next_script = current_room;
+			}
+		}
 
 		if (replay_flag)
 		{
@@ -902,6 +1002,16 @@ static void run()
 		}
 
 		music_update();
+
+		if (next_script != 0)
+		{
+			/* The script asked for another room. Blank the display
+			 * right away instead of leaving this room's last frame
+			 * (often the password/continue screen) up for another
+			 * frame, then load the room at the top of the loop. */
+			render_blank();
+			continue;
+		}
 
 		rest(12);
 	}
@@ -1073,8 +1183,74 @@ static struct parg_option options[] =
 	{0, 0, 0, 0}
 };
 
+/** Duplicates an ISO/music prefix, dropping a trailing ".iso" so
+    "--iso game.iso" and "--iso game" mean the same thing.
+*/
+static char *dup_prefix(const char *text)
+{
+	char *copy;
+	size_t len;
+
+	if (text == NULL)
+	{
+		return NULL;
+	}
+
+	copy = strdup(text);
+	if (copy == NULL)
+	{
+		return NULL;
+	}
+
+	len = strlen(copy);
+	if (len > 4 && SDL_strcasecmp(copy + len - 4, ".iso") == 0)
+	{
+		copy[len - 4] = '\0';
+	}
+
+	return copy;
+}
+
+/** Parses a complete integer command line value.
+    @returns zero on success
+*/
+static int parse_int(const char *text, int *value)
+{
+	char *end;
+	long parsed;
+
+	if (text == NULL || *text == '\0')
+	{
+		return -1;
+	}
+
+	parsed = strtol(text, &end, 10);
+	if (*end != '\0' || parsed < INT_MIN || parsed > INT_MAX)
+	{
+		return -1;
+	}
+
+	*value = (int)parsed;
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+	/* The C runtime gives ANSI argv on Windows. Re-read the command
+	 * line so UTF-8 paths (accented folders, for example) survive. */
+	{
+		int utf8_argc = 0;
+		char **utf8_argv = hota_utf8_argv(&utf8_argc);
+
+		if (utf8_argv != NULL)
+		{
+			argc = utf8_argc;
+			argv = utf8_argv;
+		}
+	}
+#endif
+
 	next_script = 0;
 
 	// set default options
@@ -1102,7 +1278,11 @@ int main(int argc, char **argv)
 		switch(c)
 		{
 			case 'r':
-			next_script = atoi(ps.optarg);
+			if (parse_int(ps.optarg, &next_script) < 0)
+			{
+				fprintf(stderr, "invalid room number '%s'\n", ps.optarg);
+				return 1;
+			}
 			break;
 
 			case 'h':
@@ -1114,7 +1294,11 @@ int main(int argc, char **argv)
 			break;
 
 			case 's':
-			cls.scale = atoi(ps.optarg);
+			if (parse_int(ps.optarg, &cls.scale) < 0)
+			{
+				fprintf(stderr, "invalid scale factor '%s' (valid: 0-16, 0 = auto)\n", ps.optarg);
+				return 1;
+			}
 			if (cls.scale < 0 || cls.scale > 16)
 			{
 				fprintf(stderr, "invalid scale factor %d (valid: 0-16, 0 = auto)\n", cls.scale);
@@ -1123,7 +1307,11 @@ int main(int argc, char **argv)
 			break;
 
 			case 'u':
-			cls.upscale = atoi(ps.optarg);
+			if (parse_int(ps.optarg, &cls.upscale) < 0)
+			{
+				fprintf(stderr, "invalid upscale factor '%s' (valid: 0-4, 0 = auto)\n", ps.optarg);
+				return 1;
+			}
 			if (cls.upscale < 0 || cls.upscale > 4)
 			{
 				fprintf(stderr, "invalid upscale factor %d (valid: 0-4, 0 = auto)\n", cls.upscale);
@@ -1136,7 +1324,11 @@ int main(int argc, char **argv)
 			break;
 
 			case 'S':
-			cls.hd_smooth = atoi(ps.optarg);
+			if (parse_int(ps.optarg, &cls.hd_smooth) < 0)
+			{
+				fprintf(stderr, "invalid HD smoothing '%s' (valid: 0-100)\n", ps.optarg);
+				return 1;
+			}
 			if (cls.hd_smooth < 0 || cls.hd_smooth > 100)
 			{
 				fprintf(stderr, "invalid HD smoothing %d (valid: 0-100)\n", cls.hd_smooth);
@@ -1157,12 +1349,14 @@ int main(int argc, char **argv)
 			}
 			if (ps.optarg != NULL)
 			{
-				cls.iso_prefix = strdup(ps.optarg);
+				free(cls.iso_prefix);
+				cls.iso_prefix = dup_prefix(ps.optarg);
 			}
 			break;
 
 			case 'm':
-			cls.music_prefix = strdup(ps.optarg);
+			free(cls.music_prefix);
+			cls.music_prefix = dup_prefix(ps.optarg);
 			break;
 
 			case 'k':
@@ -1187,25 +1381,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (replay_flag)
-	{
-		record_fp = fopen(RECORDED_KEYS_FILENAME, "rb");
-		if (record_fp == NULL)
-		{
-			perror("failed to open 'recorded-keys' file for replay");
-			return 1;
-		}
-	}
-	else if (record_flag)
-	{
-		record_fp = fopen(RECORDED_KEYS_FILENAME, "wb");
-		if (record_fp == NULL)
-		{
-			perror("failed to create 'recorded-keys' file");
-			return 1;
-		}
-	}
-
 	if (check_keys_flag)
 	{
 		/* validate the bindings file without starting the game */
@@ -1217,6 +1392,25 @@ int main(int argc, char **argv)
 			SDL_Quit();
 		}
 		return 0;
+	}
+
+	if (replay_flag)
+	{
+		record_fp = hota_fopen(RECORDED_KEYS_FILENAME, "rb");
+		if (record_fp == NULL)
+		{
+			perror("failed to open 'recorded-keys' file for replay");
+			return 1;
+		}
+	}
+	else if (record_flag)
+	{
+		record_fp = hota_fopen(RECORDED_KEYS_FILENAME, "wb");
+		if (record_fp == NULL)
+		{
+			perror("failed to create 'recorded-keys' file");
+			return 1;
+		}
 	}
 
 	if (initialize() < 0)

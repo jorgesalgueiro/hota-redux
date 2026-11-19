@@ -24,6 +24,7 @@
 #include <SDL3/SDL.h>
 
 #include "keymap.h"
+#include "platform.h"
 
 #define KM_MAX_BINDINGS 4
 #define KM_LINE_SIZE 512
@@ -51,6 +52,7 @@ static const keymap_entry_t keymap_entries[] =
 	{ KM_A,          "action a",   "z, a",        "action button A" },
 	{ KM_B,          "action b",   "x, s",        "action button B" },
 	{ KM_C,          "action c",   "c, d",        "action button C" },
+	{ KM_START,      "start",      "enter, kpenter", "start / select button (continue, password entry)" },
 	{ KM_QUICKSAVE,  "quicksave",  "f5",          "save the game to 'quicksave'" },
 	{ KM_QUICKLOAD,  "quickload",  "f7",          "load the game from 'quicksave'" },
 	{ KM_SCREENSHOT, "screenshot", "f12",         "write 'hota-screenshot.png'" },
@@ -167,7 +169,25 @@ static const char *resolve_alias(const char *name)
 		{ "ctrl", "lctrl" },
 		{ "control", "lctrl" },
 		{ "alt", "lalt" },
-		{ "spacebar", "space" }
+		{ "spacebar", "space" },
+		/* SDL3 calls the keypad keys "Keypad 0", "Keypad Enter", ... */
+		{ "kpenter", "keypad enter" },
+		{ "kp0", "keypad 0" },
+		{ "kp1", "keypad 1" },
+		{ "kp2", "keypad 2" },
+		{ "kp3", "keypad 3" },
+		{ "kp4", "keypad 4" },
+		{ "kp5", "keypad 5" },
+		{ "kp6", "keypad 6" },
+		{ "kp7", "keypad 7" },
+		{ "kp8", "keypad 8" },
+		{ "kp9", "keypad 9" },
+		{ "kpplus", "keypad +" },
+		{ "kpminus", "keypad -" },
+		{ "kpmultiply", "keypad *" },
+		{ "kpdivide", "keypad /" },
+		{ "kpdecimal", "keypad decimal" },
+		{ "kpperiod", "keypad ." }
 	};
 	int i;
 
@@ -261,13 +281,20 @@ static int parse_binding(char *text, keymap_binding_t *binding)
 	return 0;
 }
 
-/** Parses a comma separated key list and stores it for an action. */
+/** Parses a comma separated key list and stores it for an action.
+
+    A non-empty list where every key name is invalid keeps the bindings
+    that were already in effect (normally the defaults), so one typo in
+    keys.txt does not make an action impossible to use. An empty list is
+    an explicit request to unbind the action.
+*/
 static void parse_binding_list(char *value, keymap_action action)
 {
+	keymap_binding_t parsed[KM_MAX_BINDINGS];
+	int parsed_count = 0;
+	int had_text = 0;
 	char *item;
 	char *save = NULL;
-
-	keymap_binding_count[action] = 0;
 
 	item = strtok_r(value, ",", &save);
 	while (item != NULL)
@@ -275,16 +302,33 @@ static void parse_binding_list(char *value, keymap_action action)
 		keymap_binding_t binding;
 
 		item = trim(item);
-		if (*item != '\0' && keymap_binding_count[action] < KM_MAX_BINDINGS)
+		if (*item != '\0')
+		{
+			had_text = 1;
+		}
+
+		if (*item != '\0' && parsed_count < KM_MAX_BINDINGS)
 		{
 			if (parse_binding(item, &binding) == 0)
 			{
-				keymap_bindings[action][keymap_binding_count[action]] = binding;
-				keymap_binding_count[action]++;
+				parsed[parsed_count] = binding;
+				parsed_count++;
 			}
 		}
 
 		item = strtok_r(NULL, ",", &save);
+	}
+
+	if (parsed_count == 0 && had_text)
+	{
+		/* all names were invalid: keep the current bindings */
+		return;
+	}
+
+	keymap_binding_count[action] = parsed_count;
+	for (int i = 0; i < parsed_count; i++)
+	{
+		keymap_bindings[action][i] = parsed[i];
 	}
 }
 
@@ -305,7 +349,7 @@ static int write_default_file(const char *filename)
 	FILE *fp;
 	int i;
 
-	fp = fopen(filename, "w");
+	fp = hota_fopen(filename, "w");
 	if (fp == NULL)
 	{
 		fprintf(stderr, "keys: could not write '%s' (using defaults)\n", filename);
@@ -342,7 +386,7 @@ int keymap_init(const char *filename)
 		return 0;
 	}
 
-	fp = fopen(filename, "r");
+	fp = hota_fopen(filename, "r");
 	if (fp == NULL)
 	{
 		/* first run: leave a documented default file behind */
@@ -397,6 +441,28 @@ int keymap_init(const char *filename)
 	/* warnings must reach the console even when the game is killed
 	 * before it writes anything else to stderr */
 	fflush(stderr);
+	return 0;
+}
+
+int keymap_matches_key(keymap_action action, SDL_Keycode key)
+{
+	int i;
+	int count;
+
+	if (action < 0 || action >= KM_COUNT)
+	{
+		return 0;
+	}
+
+	count = keymap_binding_count[action];
+	for (i = 0; i < count; i++)
+	{
+		if (keymap_bindings[action][i].key == key)
+		{
+			return 1;
+		}
+	}
+
 	return 0;
 }
 

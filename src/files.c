@@ -23,6 +23,7 @@
 #include "debug.h"
 #include "client.h"
 #include "files.h"
+#include "platform.h"
 
 // default iso name
 const char *DEFAULT_ISO_PREFIX = "Heart Of The Alien (U)";
@@ -104,7 +105,7 @@ static int is_plain_prefix(const char *prefix)
 
 static int read_file_internal(const char *filename, int size, int offset, void *out)
 {
-	FILE *fp = fopen(filename, "rb");
+	FILE *fp = hota_fopen(filename, "rb");
 	if (fp == NULL)
 	{
 		LOG(("read_file: error opening file %s\n", filename));
@@ -145,7 +146,7 @@ int read_file(const char *filename, void *out)
 		return -1;
 	}
 
-	if (!cls.use_iso && access(filename, R_OK) == 0)
+	if (!cls.use_iso && hota_file_readable(filename))
 	{
 		/* if loose file exists, prefer it */
 		LOG(("using %s file directly\n", filename));
@@ -161,7 +162,7 @@ int read_file(const char *filename, void *out)
 	 * are present, which is the layout of the distributed game data). */
 	if (get_iso_path(archive, sizeof(archive)) == 0)
 	{
-		if (access(archive, R_OK) == 0)
+		if (hota_file_readable(archive))
 		{
 			LOG(("reading %s file from iso %s\n", filename, archive));
 			return read_file_internal(archive, size, offset, out);
@@ -175,7 +176,7 @@ int read_file(const char *filename, void *out)
 			int len = snprintf(archive, sizeof(archive), "%s/%s.iso",
 				prefix, prefix);
 			if (len > 0 && (size_t)len < sizeof(archive) &&
-				access(archive, R_OK) == 0)
+				hota_file_readable(archive))
 			{
 				LOG(("reading %s file from iso %s\n", filename, archive));
 				return read_file_internal(archive, size, offset, out);
@@ -184,7 +185,7 @@ int read_file(const char *filename, void *out)
 	}
 
 	/* Last resort: loose file even when --iso was requested. */
-	if (cls.use_iso && access(filename, R_OK) == 0)
+	if (cls.use_iso && hota_file_readable(filename))
 	{
 		LOG(("using %s file directly\n", filename));
 		return read_file_internal(filename, size, 0, out);

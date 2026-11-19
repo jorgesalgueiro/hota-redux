@@ -65,7 +65,12 @@ static int stack_ptr = 0;
 */
 static void push(int v)
 {
-	assert(stack_ptr < 128);
+	if (stack_ptr < 0 || stack_ptr >= (int)(sizeof(stack) / sizeof(stack[0])))
+	{
+		LOG(("push: script stack overflow\n"));
+		return;
+	}
+
 	stack[stack_ptr++] = v;
 }
 
@@ -74,7 +79,12 @@ static void push(int v)
 */
 static int pop()
 {
-	assert(stack_ptr > 0);
+	if (stack_ptr <= 0)
+	{
+		LOG(("pop: script stack underflow\n"));
+		return 0;
+	}
+
 	stack_ptr--;
 	return stack[stack_ptr];
 }
@@ -121,9 +131,21 @@ void load_sprite(int index, int list_entry)
 
 	/* copy sprite from resources into list */
 
+	if (!valid_sprite(list_entry) || index < 0 ||
+		index >= VM_MEMORY_SIZE / 4)
+	{
+		LOG(("load_sprite: invalid sprite %d (entry %d)\n", index, list_entry));
+		return;
+	}
+
 	/* cbdc get resource */
 	a4 = get_long(0xf904) + (index << 2);
 	a4 = get_long(a4);
+	if (a4 == 0 || a4 + 4 >= VM_MEMORY_SIZE)
+	{
+		LOG(("load_sprite: invalid resource offset 0x%lx\n", a4));
+		return;
+	}
 
 	/* cbec a6-1 => 3 */
 	d3 = sprites[list_entry].frame;
@@ -833,6 +855,22 @@ void add_sprite()
 
 	/* 25 u1 index frame some_bit xx xx xx xx yy */
 
+	/* Every slot is in use: the script cannot add any more sprites. */
+	if (sprite_count >= MAX_SPRITES - 1)
+	{
+		LOG(("add_sprite: sprite list is full\n"));
+		return;
+	}
+
+	/* The list can only be damaged by a bad save state or by script
+	 * data that is not the original one. */
+	if (!valid_sprite(first_sprite) || !valid_sprite(last_sprite))
+	{
+		LOG(("add_sprite: invalid sprite list (first=%d, last=%d), resetting\n",
+			first_sprite, last_sprite));
+		reset_sprite_list();
+	}
+
 	/* bd0a */
 	entry_a4 = first_sprite;
 	d0 = next_pc();
@@ -975,8 +1013,23 @@ static int is_last_frame_in_animation(int entry)
 {
 	int a4, d0;
 
+	if (!valid_sprite(entry))
+	{
+		LOG(("is_last_frame_in_animation: invalid sprite %d\n", entry));
+		return 0;
+	}
+
 	a4 = get_long(0xf904) + (sprites[entry].index << 2);
+	if (a4 + 4 >= VM_MEMORY_SIZE)
+	{
+		return 0;
+	}
+
 	a4 = get_long(a4);
+	if (a4 == 0 || a4 >= VM_MEMORY_SIZE)
+	{
+		return 0;
+	}
 
 	/* returns 1 if sprite has reached the last frame of its sequence */
 
@@ -1455,6 +1508,12 @@ void new_task()
 
 	LOG(("*newtask* op_08 d0=%x d1=%x\n", d0, d1));
 
+	if (d0 < 0 || d0 >= MAX_TASKS)
+	{
+		LOG(("new_task: invalid task %d\n", d0));
+		return;
+	}
+
 	new_task_pc[d0] = d1;
 	task_pc[d0] = -1;
 	
@@ -1488,8 +1547,11 @@ void new_task()
 		{
 			d0--;
 			d1 = next_pc();
-			auxvars[a2] = get_variable(d1);
-			LOG(("auxvars[%d][%d] == var[%d] (=0x%x)\n", a2/32, a2%32, d1, auxvars[a2]));
+			if (a2 >= 0 && a2 < MAX_TASKS * 32)
+			{
+				auxvars[a2] = get_variable(d1);
+			}
+			LOG(("auxvars[%d][%d] == var[%d] (=0x%x)\n", a2/32, a2%32, d1, get_variable(d1)));
 			a2++;
 		}
 
@@ -1501,8 +1563,14 @@ void new_task()
 		while (d0 >= 0)
 		{
 			d0--;
-			auxvars[a2] = next_pc_word();
-			LOG(("auxvars[%d][%d] == 0x%x\n", a2/32, a2%32, auxvars[a2]));
+			{
+				int value = next_pc_word();
+				if (a2 >= 0 && a2 < MAX_TASKS * 32)
+				{
+					auxvars[a2] = value;
+				}
+				LOG(("auxvars[%d][%d] == 0x%x\n", a2/32, a2%32, value));
+			}
 			a2++;
 		}
 
@@ -2545,7 +2613,9 @@ int decode(int current_task, int start_pc)
 			}
 			else
 			{
-				imm16 = (short)(imm16 << imm8);
+				/* shift as an unsigned value: shifting a negative
+				 * signed value is undefined behaviour in C */
+				imm16 = (short)((unsigned int)(unsigned short)imm16 << imm8);
 			}
 			set_variable(var1, imm16);
 
@@ -2558,11 +2628,13 @@ int decode(int current_task, int start_pc)
 			
 			if (imm8 >= 16)
 			{
-				imm16 = 0;
+				imm16 = (get_variable(var1) < 0) ? -1 : 0;
 			}
 			else
 			{
-				imm16 = get_variable(var1) / (1 << imm8);
+				/* 68000 ASR: keep the sign, do not round towards
+				 * zero like a division would. */
+				imm16 = (short)(get_variable(var1) >> imm8);
 			}
 			set_variable(var1, imm16);
 

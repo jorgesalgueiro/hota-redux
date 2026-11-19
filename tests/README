@@ -11,7 +11,7 @@ It runs headless (SDL dummy video/audio) against the Windows build.
 
 The key binding parser has a standalone test as well:
 
-    gcc -I<sdl3>/include keymap_probe.c ../src/keymap.c -L<sdl3>/lib -lSDL3 -o keymap_probe
+    gcc -I<sdl3>/include keymap_probe.c ../src/keymap.c ../src/platform.c -L<sdl3>/lib -lSDL3 -o keymap_probe
     ./keymap_probe
     ./keymap_probe keys-sample.txt
 

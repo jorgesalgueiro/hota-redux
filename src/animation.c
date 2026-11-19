@@ -895,6 +895,15 @@ int play_animation(const char *filename, int fileoffset)
 	pattern_offset = get_long(0x809e);
 	total_patterns = get_long(0x80a2);
 
+	if (pattern_offset <= 0 || pattern_offset >= VM_MEMORY_SIZE ||
+		total_patterns <= 0 || total_patterns > 4096 ||
+		pattern_offset + total_patterns > VM_MEMORY_SIZE)
+	{
+		LOG(("play_animation: invalid pattern table (offset 0x%x, %d patterns)\n",
+			pattern_offset, total_patterns));
+		return -1;
+	}
+
 	stop = 0;
 	while (stop == 0)
 	{
@@ -911,8 +920,11 @@ int play_animation(const char *filename, int fileoffset)
 		}
 
 		palette_offset = get_long(0x809a) + (scene << 5);
-		ptr = get_memory_ptr(palette_offset);
-		set_palette_rgb12(ptr);
+		if (palette_offset > 0 && palette_offset + 32 <= VM_MEMORY_SIZE)
+		{
+			ptr = get_memory_ptr(palette_offset);
+			set_palette_rgb12(ptr);
+		}
 
 		scene_offset = get_long(0x80a6 + (pattern << 2));
 		stop = play_sequence(scene_offset, fps_);

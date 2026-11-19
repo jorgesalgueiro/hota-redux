@@ -3,6 +3,11 @@
 
 int screen_init();
 
+/** Clears all virtual screens and returns to the initial buffer layout.
+    Called when a room is loaded so no stale image can be displayed by
+    the first buffer flip of the new room. */
+void screen_clear_all(void);
+
 int get_selected_screen();
 char *get_selected_screen_ptr();
 

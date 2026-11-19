@@ -39,6 +39,12 @@ int unpack_room(void *out, int entry)
 
 	resources = get_long(0xf908);
 
+	if (resources <= 0 || resources + 2 >= VM_MEMORY_SIZE)
+	{
+		LOG(("unpack_room: invalid resource table 0x%x\n", resources));
+		return -1;
+	}
+
 	if (entry < 0 || entry >= get_word(resources))
 	{
 		LOG(("unpack_room: entry %d out of range\n", entry));
@@ -46,6 +52,12 @@ int unpack_room(void *out, int entry)
 	}
 
 	d0 = get_long(resources + 2 + (entry << 2));
+	if (d0 <= 0 || d0 + 8 > VM_MEMORY_SIZE)
+	{
+		LOG(("unpack_room: invalid backdrop offset 0x%x\n", d0));
+		return -1;
+	}
+
 	a2 = get_long(d0);
 	a3 = get_long(d0 + 4);
 

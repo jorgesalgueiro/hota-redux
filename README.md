@@ -1,4 +1,4 @@
-# Heart of The Alien Redux 2.0.1
+# Heart of The Alien Redux 2.0.2
 
 [![shot1](res/thumb1.png)](res/shot1.png)
 [![shot2](res/thumb2.png)](res/shot2.png)
@@ -8,10 +8,11 @@ A modern port of *Heart of the Alien: Out of This World Parts I and II*
 
 This repository is an unofficial, fan-made continuation of **Heart of The
 Alien Redux**, the 2004 reimplementation by **Gil Megidish**, which was later
-updated to SDL3 for the **2.0.0** release. The **2.0.1** work here adds a
+updated to SDL3 for the **2.0.0** release. The **2.0.1** work here added a
 high-resolution OpenGL renderer, adjustable pixel-art smoothing, user
-configurable key bindings, a long list of bug fixes and a Windows release.
-It was made by **Jorge Salgueiro** with the help of **opencode** and
+configurable key bindings and a Windows release. **2.0.2** adds the DOS/BIOS
+style setup screen, UTF-8 paths, a start/select key and another round of bug
+fixes. It was made by **Jorge Salgueiro** with the help of **opencode** and
 **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
@@ -33,9 +34,10 @@ When I finally found the ISO, I went looking for a way to play it on a modern
 PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
 to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
-I faced some problems, so I started fixing and polishing. One thing led to another, and this 2.0.1
-fork is the result: the same game and the same Redux engine, with a sharper
-picture, a documented key binding file, and some crashes and glitches
+I faced some problems, so I started fixing and polishing. One thing led to
+another, and this 2.0.1 / 2.0.2 fork is the result: the same game and the same
+Redux engine, with a sharper picture, a documented key binding file, and some
+crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
 and this README were written together with **opencode** (the coding agent) and
 **DeepSeek** (the model behind it) as an AI pair-programmer. *Heart of the
@@ -72,8 +74,14 @@ Alien* itself remains the work of its original creators — see
 - **Window and timing fixes.** The window sizes itself to fit the desktop, the
   GL renderer no longer stalls input and audio when the window is occluded or
   minimized, and vsync no longer freezes the game on some drivers.
-- **`play.bat` launcher.** Double-click it to start from the ISO with the
-  recommended settings; extra arguments are passed through to `alien.exe`.
+- **`play.bat` setup screen.** Double-click it to open a DOS/BIOS-style
+  screen that lists every launcher option next to its default. Change the
+  renderer, smoothing, window size, ISO folder, keys file and so on, then
+  choose **START GAME**. The settings are remembered in `play.cfg`.
+  Command line arguments still start the game immediately, exactly as
+  before.
+- **Unicode paths.** On Windows the ISO, music tracks and key file can live
+  in folders with accents or any other non-ASCII characters.
 
 ### Under the hood
 
@@ -82,7 +90,7 @@ Alien* itself remains the work of its original creators — see
   (see the [changelog](#changelog)).
 - **Bounds checking** for corrupt or unexpected sprite, save and path data, so
   a bad file gives a warning instead of a crash.
-- **Regression suite.** `tests/run-tests.ps1` runs 37 headless scenarios
+- **Regression suite.** `tests/run-tests.ps1` runs 39 headless scenarios
   (startup, every room, every upscaler, HD and SDL renderers, key binding
   parsing, recorded playthroughs) and `tests/run-asan.sh` runs the same kind
   of checks under AddressSanitizer/UBSan on Linux.
@@ -95,14 +103,14 @@ Alien* itself remains the work of its original creators — see
   source with SDL3 and SDL3_mixer.
 - A copy of the Sega CD game: `Heart Of The Alien (U).iso` plus, if you want
   music, the matching MP3/OGG/WAV/Opus/FLAC tracks.
-- OpenGL 2.1 or newer for the HD renderer (optional; the game falls back to
-  the plain SDL renderer).
+- OpenGL 3.0 or newer (GLSL 1.30) for the HD renderer. Optional: the game
+  falls back to the plain SDL renderer when it is not available.
 
 ## Running
 
 ### The easy way (Windows release zip)
 
-1. Unpack `hota-redux-2.0.1-win64.zip` into a folder of your choice.
+1. Unpack `hota-redux-2.0.2-win64.zip` into a folder of your choice.
 2. Put your game data next to `alien.exe`, keeping the original names:
 
    ```
@@ -110,27 +118,36 @@ Alien* itself remains the work of its original creators — see
    SDL3.dll
    SDL3_mixer.dll
    play.bat
+   play.ps1
    Heart Of The Alien (U)\Heart Of The Alien (U).iso
    Heart Of The Alien (U)\Heart Of The Alien (U) 02.mp3
    ...
    ```
 
-3. Double-click **`play.bat`**.
+3. Double-click **`play.bat`** and press <kbd>S</kbd> (or choose **START GAME**)
+   on the setup screen.
 
-`play.bat` changes to its own folder and runs:
+The setup screen shows the current value of each option next to its built-in
+default. Use the arrow keys to move between rows and to change a value,
+<kbd>Enter</kbd> to edit a path or activate an action, <kbd>S</kbd> to start
+the game, <kbd>R</kbd> to restore the defaults and <kbd>Esc</kbd> to save and
+leave. Settings are stored in `play.cfg` next to the launcher; delete that
+file to get the defaults back.
 
-```
-alien.exe --iso --hd --hd-smooth 30
-```
-
-so it works no matter where you unpacked the zip, and any extra arguments are
-passed to the game:
+`play.bat` changes to its own folder before starting the game, so it works no
+matter where you unpacked the zip. `play.bat --setup` forces the setup screen.
+Other command line arguments skip the setup screen and are passed straight to
+the game, e.g.:
 
 ```
 play.bat --fullscreen
 play.bat --sharp
 play.bat --iso "My Rip"
 ```
+
+`play.ps1` is the setup screen itself. `play.bat` calls it with Windows
+PowerShell; if PowerShell or `play.ps1` is missing, `play.bat` falls back to
+the old direct launch with the recommended settings.
 
 ### From the command line
 
@@ -200,6 +217,7 @@ available on both `Z`/`X`/`C` and `A`/`S`/`D`:
 - <kbd>Z</kbd>/<kbd>A</kbd>  shoot, keep it down to run
 - <kbd>X</kbd>/<kbd>S</kbd>  use your whip
 - <kbd>C</kbd>/<kbd>D</kbd>  jump
+- <kbd>Enter</kbd>          start / select (continue and password screens)
 - <kbd>F5</kbd>              quicksave (one slot)
 - <kbd>F7</kbd>              quickload
 - <kbd>F2</kbd>              cycle internal upscaling (classic renderer)
@@ -220,6 +238,9 @@ move up = up
 
 # action button A
 action a = z, a
+
+# start / select button
+start = enter, kpenter
 
 screenshot = f12
 fullscreen = alt+enter
@@ -251,12 +272,12 @@ and falls back to the plain SDL renderer automatically.
 
 The Windows release in this repository is built with MinGW-w64 gcc 16.2,
 CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged with
-`play.bat`, `alien.exe`, `SDL3.dll`, `SDL3_mixer.dll`, `README.md`, `COPYING`
-and `AUTHORS.md` in a single flat zip.
+`play.bat`, `play.ps1`, `alien.exe`, `SDL3.dll`, `SDL3_mixer.dll`, `README.md`,
+`COPYING` and `AUTHORS.md` in a single flat zip.
 
 ## Tests
 
-- `tests/run-tests.ps1` — headless Windows suite: 37 checks covering option
+- `tests/run-tests.ps1` — headless Windows suite: 39 checks covering option
   validation, the intro, every room, every upscaler, both renderers, the key
   binding parser and recorded playthroughs. Game data is expected at
   `tests/work/game.iso`.
@@ -328,7 +349,7 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Lior Halphon** — author of the **Omniscale** pixel-art shader (MIT), and
   **hunterk** for the RetroArch GLSL port used in `src/omniscale_shader.h`.
 
-### This 2.0.1 fork
+### This 2.0.1 / 2.0.2 fork
 
 - **Jorge Salgueiro** — SDL3/OpenGL HD renderer, adjustable Omniscale
   smoothing, key binding system, renderer/screenshot fixes, the bug fixes
@@ -363,6 +384,45 @@ included in this repository.
 - *Another World* by Éric Chahi: <https://www.anotherworld.fr/>
 
 ## Changelog
+
+### 2.0.2
+
+Setup and controls:
+
+- Added: DOS/BIOS-style setup screen (`play.ps1`, started by `play.bat`) that
+  lists every option with its current value and built-in default; settings are
+  stored in `play.cfg`
+- Added: <kbd>Enter</kbd> as the start/select button, so the continue and
+  password screens work from the keyboard
+- Added: `play.bat --setup` to force the setup screen; command line arguments
+  still start the game immediately
+- Fixed: two keys bound to one action releasing each other (A while Z is held,
+  or a custom second binding)
+- Fixed: key-up events after focus loss leaving keys stuck
+- Fixed: keypad names (`kpenter`, `kp0`, ...) rejected by SDL3
+- Fixed: a typo in `keys.txt` disabling an action instead of keeping its default
+- Fixed: the reset key combination now restarts the current level
+
+Game fixes:
+
+- Fixed: the previous room's password/game-over screen flashing for a moment
+  while the first level loaded
+- Fixed: the Scale3x middle-left pixel using the wrong neighbour test
+- Fixed: the ASR opcode rounding negative values towards zero
+- Fixed: bounds checks for the script stack, sprites, task data, variable
+  copies, room resources, LZSS output, animations and audio samples
+- Fixed: Windows game-data, music and key files in folders with non-ASCII
+  characters (UTF-8/UTF-16 file paths and wide command line arguments)
+- Fixed: quicksave/quickload now flush the recorded-key buffer
+- Fixed: `--iso game.iso` is accepted, numeric options reject garbage, and
+  `--check-keys` no longer creates a `recorded-keys` file
+
+Build and testing:
+
+- Added: 39-check regression suite, including UTF-8 path and launcher checks
+- Added: more key binding tests (start key, keypad names, invalid bindings)
+- Updated: Windows release zip (`alien.exe`, SDL3 DLLs, docs, `play.bat`,
+  `play.ps1`)
 
 ### 2.0.1
 

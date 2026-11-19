@@ -36,4 +36,7 @@ void gl_render_frame(const unsigned char *indices, int pitch,
 /** Requests a high-resolution screenshot on the next presented frame. */
 void gl_render_screenshot(const char *filename);
 
+/** Presents a black frame (used while a room is loading). */
+void gl_render_blank(void);
+
 #endif // GL_RENDER_H

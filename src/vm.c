@@ -155,10 +155,16 @@ void set_variable(int var, short value)
 */
 void copy_tls_to_global(int dst_index, int src_index, int count)
 {
-	/* copy variables from variables to active-var-vector */
+	/* copy variables from the active (TLS) bank to the global set */
 	while (count >= 0)
 	{
-		variables[dst_index++] = get_variable(src_index++);
+		if (dst_index >= 0 && dst_index < MAX_VARIABLES)
+		{
+			variables[dst_index] = get_variable(src_index);
+		}
+
+		dst_index++;
+		src_index++;
 		count--;
 	}
 }
@@ -172,7 +178,13 @@ void copy_global_to_tls(int dst_index, int src_index, int count)
 {
 	while (count >= 0)
 	{
-		set_variable(dst_index++, variables[src_index++]);
+		if (src_index >= 0 && src_index < MAX_VARIABLES)
+		{
+			set_variable(dst_index, variables[src_index]);
+		}
+
+		dst_index++;
+		src_index++;
 		count--;
 	}
 }
@@ -199,10 +211,10 @@ unsigned char *get_memory_ptr(int offset)
 		LOG(("get_memory_ptr: offset 0x%x out of range\n", offset));
 		offset = 0;
 	}
-	else if (offset > MEMORY_SIZE)
+	else if (offset >= MEMORY_SIZE)
 	{
 		LOG(("get_memory_ptr: offset 0x%x out of range\n", offset));
-		offset = MEMORY_SIZE;
+		offset = 0;
 	}
 
 	return (unsigned char *)memory + offset;

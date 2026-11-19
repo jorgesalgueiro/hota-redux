@@ -29,6 +29,7 @@
 #include "vm.h"
 #include "client.h"
 #include "files.h"
+#include "platform.h"
 
 static MIX_Mixer *mixer;
 static MIX_Track *music;
@@ -88,16 +89,32 @@ void play_sample(int index, int volume, int channel)
 		return;
 	}
 
+	if (index < 0 || index > 0xff)
+	{
+		LOG(("play_sample: invalid sample index %d\n", index));
+		return;
+	}
+
 	index = index - 1;
 	LOG(("playing sample %d, volume %d, channel %d\n", index, volume, channel));
 
 	int sample_ptr = get_long(0xf90c);
-	int ptr = get_long(sample_ptr + index * 4);
-	int length = get_long(ptr);
+	int table_entry = sample_ptr + index * 4;
 
-	if (length <= 0)
+	if (sample_ptr <= 0 || sample_ptr >= VM_MEMORY_SIZE ||
+		table_entry < 0 || table_entry + 4 > VM_MEMORY_SIZE)
 	{
-		LOG(("play_sample: invalid sample length %d\n", length));
+		LOG(("play_sample: sample table entry %d is out of range\n", index));
+		return;
+	}
+
+	int ptr = get_long(table_entry);
+	int length = (ptr > 0 && ptr + 4 <= VM_MEMORY_SIZE) ? get_long(ptr) : 0;
+
+	if (length <= 0 || ptr + 8 + length > VM_MEMORY_SIZE)
+	{
+		LOG(("play_sample: invalid sample %d (offset 0x%x, length %d)\n",
+			index, ptr, length));
 		return;
 	}
 
@@ -263,7 +280,7 @@ static int find_music_file(char *filename, size_t filename_size,
 		return -1;
 	}
 
-	if (access(filename, R_OK) == 0)
+	if (hota_file_readable(filename))
 	{
 		return 0;
 	}
@@ -273,7 +290,7 @@ static int find_music_file(char *filename, size_t filename_size,
 		len = snprintf(filename, filename_size, "%s/%s %02d.%s",
 			prefix, prefix, track + 1, extension);
 		if (len > 0 && (size_t)len < filename_size &&
-			access(filename, R_OK) == 0)
+			hota_file_readable(filename))
 		{
 			return 0;
 		}

@@ -19,6 +19,9 @@
 #ifndef __LZSS_INCLUDED__
 #define __LZSS_INCLUDED__
 
+/** One 4bpp backdrop: 304x192 pixels packed two per byte. */
+#define LZSS_OUTPUT_SIZE (304*192/2)
+
 /** Decompresses lzss packed byte buffer
     @param out      output buffer (must be of size 304*192/2 bytes)
 

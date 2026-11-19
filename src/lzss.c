@@ -21,6 +21,7 @@
 #include <string.h>
 
 #include "vm.h"
+#include "lzss.h"
 
 /** Decompresses lzss packed byte buffer
     @param out      output buffer (must be of size 304*192/2 bytes)
@@ -36,6 +37,8 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	int bitmask, bits_left, d2, d3, d4, d6;
 	int common_distances;
 	unsigned char *copy_from;
+	unsigned char *out_start = out;
+	unsigned char *out_end = out + LZSS_OUTPUT_SIZE;
 
 	/* 
 	bits_left bits left (and bit checked)
@@ -46,6 +49,12 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	d4 = get_word(ptr2);
 	packed = ptr2 + 20;
 	common_distances = ptr2 + 3;
+
+	if (out >= out_end)
+	{
+		return -1;
+	}
+
 	*out++ = get_byte(packed++);
 
 	loc_cf6e:
@@ -66,6 +75,11 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	if (bitmask & (1u << bits_left))
 	{
 		/* escaped literal */
+		if (out >= out_end)
+		{
+			return -1;
+		}
+
 		*out++ = get_byte(packed++);
 		goto loc_cf76;
 	}
@@ -176,10 +190,27 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	{
 		/* direct copy */
 		int count = d2 + d6 + 2;
+
+		if (d3 <= 0)
+		{
+			return -1;
+		}
+
 		copy_from = out - d3;
+		if (copy_from < out_start)
+		{
+			/* corrupt stream: the back-reference points before the
+			 * start of the output buffer */
+			return -1;
+		}
 
 		while (count--)
 		{
+			if (out >= out_end)
+			{
+				return -1;
+			}
+
 			*out++ = *copy_from++;
 		}
 

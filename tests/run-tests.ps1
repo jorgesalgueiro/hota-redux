@@ -1,4 +1,4 @@
-<#
+﻿<#
     Smoke/regression tests for Heart of The Alien Redux.
 
     Runs the Windows build headlessly (SDL dummy video/audio) against the
@@ -69,6 +69,16 @@ function Read-LogFile {
     return ''
 }
 
+function Quote-Argument {
+    param([string]$Text)
+
+    if ($Text -match '\s') {
+        return '"' + $Text + '"'
+    }
+
+    return $Text
+}
+
 function Invoke-Game {
     param(
         [string[]]$Arguments,
@@ -79,7 +89,9 @@ function Invoke-Game {
     $stderr = Join-Path $artifacts 'stderr.log'
     Remove-Item -LiteralPath $stdout, $stderr -ErrorAction SilentlyContinue
 
-    $process = Start-Process -FilePath $Exe -ArgumentList $Arguments `
+    $argLine = ($Arguments | ForEach-Object { Quote-Argument $_ }) -join ' '
+
+    $process = Start-Process -FilePath $Exe -ArgumentList $argLine `
         -WorkingDirectory $work -PassThru `
         -RedirectStandardOutput $stdout -RedirectStandardError $stderr
 
@@ -139,6 +151,15 @@ Check '--help' {
     $r = Invoke-Game @('--help') 10
     if (-not $r.Exited) { throw 'did not exit' }
     if ($r.StdOut -notmatch 'Heart of The Alien Redux') { throw 'missing banner' }
+}
+
+Check 'launcher --print-options' {
+    $launcher = Join-Path $PSScriptRoot '..\play.ps1'
+    if (-not (Test-Path -LiteralPath $launcher)) { throw 'play.ps1 is missing' }
+    $out = & powershell -NoProfile -ExecutionPolicy Bypass -File $launcher --print-options 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "launcher exited with $LASTEXITCODE" }
+    if ($out -notmatch '"renderer"') { throw "no settings in output: $out" }
+    if ($out -notmatch 'ARGS:') { throw "no argument line in output: $out" }
 }
 
 Check '--room validation (9 is invalid)' {
@@ -252,6 +273,23 @@ Check 'broken keys file only warns' {
     if ($r.StdErr -notmatch "unknown action 'no such action'") { throw "missing action warning: $($r.StdErr)" }
     if ($r.StdErr -notmatch "unknown key name 'not-a-key'") { throw "missing key warning: $($r.StdErr)" }
     Remove-Item -LiteralPath $keys -ErrorAction SilentlyContinue
+}
+
+Check 'UTF-8 game data path' {
+    $folder = Join-Path $work 'Coração'
+    New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    $target = Join-Path $folder 'Coração.iso'
+    if (-not (Test-Path -LiteralPath $target)) {
+        $source = Join-Path $DataDir 'Heart Of The Alien (U).iso'
+        try {
+            New-Item -ItemType HardLink -Path $target -Target $source | Out-Null
+        } catch {
+            Copy-Item -LiteralPath $source -Destination $target
+        }
+    }
+    $r = Invoke-Game @('--iso', (Join-Path $folder 'Coração'), '--room', '1', '--fastest') $IdleSeconds
+    if ($r.Exited) { throw "exited early (code $($r.ExitCode))" }
+    Assert-NoPanic $r
 }
 
 Check 'smooth Scale2x/3x upscaling' {
