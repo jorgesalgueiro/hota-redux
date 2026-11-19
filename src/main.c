@@ -83,6 +83,7 @@ int replay_flag = 0;
 int fullscreen_flag = 0;
 int fastest_flag = 0;
 int check_keys_flag = 0;
+int skip_password_flag = 1;
 
 short task_pc[64];
 short new_task_pc[64];
@@ -98,6 +99,16 @@ static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_selec
 static int held_up, held_down, held_left, held_right;
 static int held_a, held_b, held_c, held_start, held_reset;
 static int reset_requested = 0;
+
+/* A tap shorter than one game frame produces a key-down and a key-up
+ * event before the script runs. These latches keep that tap visible for
+ * exactly one frame so a quick shot/jump/step is never lost. */
+static int pressed_up, pressed_down, pressed_left, pressed_right;
+static int pressed_a, pressed_b, pressed_c, pressed_start;
+
+/** Keys that were effective for the last update_keys() call, used by
+    the key recorder so recorded/replayed input matches the game. */
+static unsigned char frame_key_byte = 0;
 
 static Uint64 last_tick = 0, last_tick_fp = 0;
 
@@ -315,19 +326,14 @@ void read_keys_from_record()
 */
 void add_keys_to_record()
 {
-	int c;
-
 	if (record_fp == NULL)
 	{
 		return;
 	}
 
-	c = (key_up << 7) | (key_down << 6);
-	c = c | (key_left << 5) | (key_right << 4);
-	c = c | (key_a << 3) | (key_b << 2);
-	c = c | (key_c << 1) | key_select;
-
- 	cached_recorded_keys[cached_keys_offset++] = c;
+	/* frame_key_byte was built by update_keys(), so it contains the
+	 * effective state including a one-frame tap. */
+	cached_recorded_keys[cached_keys_offset++] = frame_key_byte;
  	if (cached_keys_offset == sizeof(cached_recorded_keys))
 	{
  		/* if the player never quicksaves or quickloads */
@@ -342,6 +348,34 @@ void add_keys_to_record()
 void update_keys()
 {
 	short flags;
+	int up, down, left, right, a, b, c, select;
+
+	if (replay_flag)
+	{
+		/* replay drives the keys directly; physical latches must not
+		 * leak into the recorded sequence */
+		up = key_up;
+		down = key_down;
+		left = key_left;
+		right = key_right;
+		a = key_a;
+		b = key_b;
+		c = key_c;
+		select = key_select;
+		pressed_up = pressed_down = pressed_left = pressed_right = 0;
+		pressed_a = pressed_b = pressed_c = pressed_start = 0;
+	}
+	else
+	{
+		up = key_up || pressed_up;
+		down = key_down || pressed_down;
+		left = key_left || pressed_left;
+		right = key_right || pressed_right;
+		a = key_a || pressed_a;
+		b = key_b || pressed_b;
+		c = key_c || pressed_c;
+		select = key_select || pressed_start;
+	}
 
 	toggle_aux(0);           /* me and my paranoia */
 	set_variable(253, 0);
@@ -351,30 +385,30 @@ void update_keys()
 
 	flags = 0;
 
-	if (key_right)
+	if (right)
 	{
 		set_variable(252, 1);
 		flags |= 1;
 	}
-	else if (key_left)
+	else if (left)
 	{
 		set_variable(252, -1);
 		flags |= 2;
 	}
-	else if (key_down)
+	else if (down)
 	{
 		set_variable(251, 1);
 		set_variable(229, 1);
 		flags |= 4;
 	}
 
-	if (key_up)
+	if (up)
 	{
 		set_variable(229, -1);
 		flags |= 8;
 	}
 
-	if (key_c)
+	if (c)
 	{
 		set_variable(251, -1);
 		flags |= 8;
@@ -387,14 +421,37 @@ void update_keys()
 	set_variable(250, 0);
 	set_variable(254, get_variable(253));
 
-	if (key_b)
+	if (b)
 	{
 		set_variable(254, (unsigned short)(get_variable(254) | 0x40));
 	}
-	else if (key_a)
+	else if (a)
 	{
 		set_variable(250, 1);
 		set_variable(254, (unsigned short)(get_variable(254) | 0x80));
+	}
+
+	/* The game-over screen uses variable 226 as "start pressed":
+	 * leaving it set opens the password entry screen. */
+	set_variable(226, select ? 1 : 0);
+
+	frame_key_byte = (unsigned char)((up << 7) | (down << 6) |
+		(left << 5) | (right << 4) | (a << 3) | (b << 2) |
+		(c << 1) | select);
+
+	if (!replay_flag)
+	{
+		/* consume one-frame taps; held keys stay pressed next frame */
+		key_up = held_up > 0;
+		key_down = held_down > 0;
+		key_left = held_left > 0;
+		key_right = held_right > 0;
+		key_a = held_a > 0;
+		key_b = held_b > 0;
+		key_c = held_c > 0;
+		key_select = held_start > 0;
+		pressed_up = pressed_down = pressed_left = pressed_right = 0;
+		pressed_a = pressed_b = pressed_c = pressed_start = 0;
 	}
 }
 
@@ -406,6 +463,12 @@ void quickload()
 	int palette_used;
 	long file_size;
 	FILE *fp;
+
+	if (current_room < 1 || current_room > 8)
+	{
+		/* still in the intro or a test screen */
+		return;
+	}
 
 	/* the recorded key stream should not lose the frames before the load */
 	if (record_flag)
@@ -505,6 +568,13 @@ void quicksave()
 	int i, j;
 	FILE *fp;
 
+	if (current_room < 1 || current_room > 8 || current_backdrop < 1)
+	{
+		/* still in the intro, a test screen, or before the first
+		 * screen of a room has been loaded */
+		return;
+	}
+
 	if (record_flag)
 	{
 		flush_recorded_keys();
@@ -570,6 +640,8 @@ static void release_all_keys()
 	key_a = key_b = key_c = key_select = 0;
 	held_up = held_down = held_left = held_right = 0;
 	held_a = held_b = held_c = held_start = held_reset = 0;
+	pressed_up = pressed_down = pressed_left = pressed_right = 0;
+	pressed_a = pressed_b = pressed_c = pressed_start = 0;
 	reset_requested = 0;
 	speed_throttle = 0;
 }
@@ -686,26 +758,31 @@ void check_events()
 			{
 				held_right++;
 				key_right = 1;
+				pressed_right = 1;
 			}
 			if (keymap_matches(KM_LEFT, event.key.key, event.key.mod))
 			{
 				held_left++;
 				key_left = 1;
+				pressed_left = 1;
 			}
 			if (keymap_matches(KM_UP, event.key.key, event.key.mod))
 			{
 				held_up++;
 				key_up = 1;
+				pressed_up = 1;
 			}
 			if (keymap_matches(KM_DOWN, event.key.key, event.key.mod))
 			{
 				held_down++;
 				key_down = 1;
+				pressed_down = 1;
 			}
 			if (keymap_matches(KM_A, event.key.key, event.key.mod))
 			{
 				held_a++;
 				key_a = 1;
+				pressed_a = 1;
 				if (held_reset > 0)
 				{
 					reset_requested = 1;
@@ -715,16 +792,22 @@ void check_events()
 			{
 				held_b++;
 				key_b = 1;
+				pressed_b = 1;
 			}
 			if (keymap_matches(KM_C, event.key.key, event.key.mod))
 			{
 				held_c++;
 				key_c = 1;
+				pressed_c = 1;
 			}
-			if (keymap_matches(KM_START, event.key.key, event.key.mod))
+			/* Alt+Enter is fullscreen, not the start button. */
+			if (keymap_matches(KM_START, event.key.key, event.key.mod) &&
+				!(event.key.key == SDLK_RETURN &&
+					(event.key.mod & SDL_KMOD_ALT)))
 			{
 				held_start++;
 				key_select = 1;
+				pressed_start = 1;
 			}
 			if (keymap_matches(KM_RESET, event.key.key, event.key.mod))
 			{
@@ -811,6 +894,16 @@ void rest(int fps)
 		last_tick_fp = diff & 0xffff;
 		diff = diff >> 16;
 		Uint64 current_tick = SDL_GetTicks();
+
+		/* After a long stall (alt-tab, debugger, slow room load) do
+		 * not replay a burst of frames to catch up: that would skip
+		 * over the player's input. Resume from the current time. */
+		if (current_tick - last_tick > 1000)
+		{
+			last_tick = current_tick;
+			last_tick_fp = 0;
+		}
+
 		while (current_tick - last_tick < diff)
 		{
 			SDL_Delay(1);
@@ -906,7 +999,9 @@ static void run()
 		 * first play intro, then jump to code entry script.
 		 */
 		play_intro();
-		next_script = 7;
+		/* The code entry screen is a level selector. By default jump
+		 * straight into the first level instead. */
+		next_script = skip_password_flag ? 1 : 7;
 	}
 
 	rest(0);
@@ -918,6 +1013,7 @@ static void run()
 		if (next_script != 0)
 		{
 			current_room = next_script;
+			current_backdrop = 0;
 			reset_sprite_list();
 			init_tasks();
 
@@ -1143,6 +1239,9 @@ static void help()
 	puts("\t--sharp        HD: nearest shader instead of Omniscale");
 	puts("\t--hd-smooth n  HD: Omniscale diagonal smoothing 0-100 (default: 30)");
 	puts("\t--fullscreen   start in fullscreen");
+	puts("\t--no-sound     disable music and sound effects");
+	puts("\t--skip-password   skip the code entry screen (default)");
+	puts("\t--no-skip-password show the original code entry screen");
 	puts("\t--room n       start from room <n>");
 	puts("\t--iso prefix   use ISO image <prefix.iso>");
 	puts("\t--music prefix use music <prefix.[wav/mp3/ogg/opus/flac]>");
@@ -1164,6 +1263,8 @@ static struct parg_option options[] =
 	{"music", PARG_REQARG, NULL, 'm'},
 	{"keys", PARG_REQARG, NULL, 'k'},
 	{"check-keys", PARG_NOARG, &check_keys_flag, 1},
+	{"skip-password", PARG_NOARG, &skip_password_flag, 1},
+	{"no-skip-password", PARG_NOARG, &skip_password_flag, 0},
 	{"sprite-test", PARG_NOARG, &test_flag, 1},
 	{"intro-test", PARG_NOARG, &test_flag, 2},
 	{"help", PARG_NOARG, NULL, 'h'},

@@ -1,4 +1,4 @@
-# Heart of The Alien Redux 2.0.2
+# Heart of The Alien Redux 2.0.3
 
 [![shot1](res/thumb1.png)](res/shot1.png)
 [![shot2](res/thumb2.png)](res/shot2.png)
@@ -10,10 +10,11 @@ This repository is an unofficial, fan-made continuation of **Heart of The
 Alien Redux**, the 2004 reimplementation by **Gil Megidish**, which was later
 updated to SDL3 for the **2.0.0** release. The **2.0.1** work here added a
 high-resolution OpenGL renderer, adjustable pixel-art smoothing, user
-configurable key bindings and a Windows release. **2.0.2** adds the DOS/BIOS
-style setup screen, UTF-8 paths, a start/select key and another round of bug
-fixes. It was made by **Jorge Salgueiro** with the help of **opencode** and
-**DeepSeek**.
+configurable key bindings and a Windows release. **2.0.2** added the DOS/BIOS
+style setup screen, UTF-8 paths and a start/select key. **2.0.3** improves
+input precision, skips the password screen by default, fixes the game-over
+Start path and hardens the decoders. It was made by **Jorge Salgueiro** with
+the help of **opencode** and **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
 > provide its ISO image (and optionally the CD music) yourself. Game data is
@@ -35,7 +36,7 @@ PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
 to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
 I faced some problems, so I started fixing and polishing. One thing led to
-another, and this 2.0.1 / 2.0.2 fork is the result: the same game and the same
+another, and this 2.0.1 / 2.0.3 fork is the result: the same game and the same
 Redux engine, with a sharper picture, a documented key binding file, and some
 crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
@@ -82,6 +83,9 @@ Alien* itself remains the work of its original creators — see
   before.
 - **Unicode paths.** On Windows the ISO, music tracks and key file can live
   in folders with accents or any other non-ASCII characters.
+- **No password needed.** After the intro the game starts level 1 directly.
+  The original code-entry screen is still available with
+  `--no-skip-password` or from the setup screen.
 
 ### Under the hood
 
@@ -90,7 +94,7 @@ Alien* itself remains the work of its original creators — see
   (see the [changelog](#changelog)).
 - **Bounds checking** for corrupt or unexpected sprite, save and path data, so
   a bad file gives a warning instead of a crash.
-- **Regression suite.** `tests/run-tests.ps1` runs 39 headless scenarios
+- **Regression suite.** `tests/run-tests.ps1` runs 40 headless scenarios
   (startup, every room, every upscaler, HD and SDL renderers, key binding
   parsing, recorded playthroughs) and `tests/run-asan.sh` runs the same kind
   of checks under AddressSanitizer/UBSan on Linux.
@@ -110,7 +114,7 @@ Alien* itself remains the work of its original creators — see
 
 ### The easy way (Windows release zip)
 
-1. Unpack `hota-redux-2.0.2-win64.zip` into a folder of your choice.
+1. Unpack `hota-redux-2.0.3-win64.zip` into a folder of your choice.
 2. Put your game data next to `alien.exe`, keeping the original names:
 
    ```
@@ -128,11 +132,11 @@ Alien* itself remains the work of its original creators — see
    on the setup screen.
 
 The setup screen shows the current value of each option next to its built-in
-default. Use the arrow keys to move between rows and to change a value,
-<kbd>Enter</kbd> to edit a path or activate an action, <kbd>S</kbd> to start
-the game, <kbd>R</kbd> to restore the defaults and <kbd>Esc</kbd> to save and
-leave. Settings are stored in `play.cfg` next to the launcher; delete that
-file to get the defaults back.
+default, including **Skip password** (on by default). Use the arrow keys to
+move between rows and to change a value, <kbd>Enter</kbd> to edit a path or
+activate an action, <kbd>S</kbd> to start the game, <kbd>R</kbd> to restore
+the defaults and <kbd>Esc</kbd> to save and leave. Settings are stored in
+`play.cfg` next to the launcher; delete that file to get the defaults back.
 
 `play.bat` changes to its own folder before starting the game, so it works no
 matter where you unpacked the zip. `play.bat --setup` forces the setup screen.
@@ -155,9 +159,11 @@ the old direct launch with the recommended settings.
 alien.exe --iso
 ```
 
-With no arguments the game plays the introduction and then shows the code
-entry screen. The default ISO prefix is `Heart Of The Alien (U)`, and the
-default music prefix follows the ISO prefix. The level 1 password is `BDXF`.
+With no arguments the game plays the introduction and then starts level 1
+directly. The original code-entry screen is a level selector; use
+`--no-skip-password` to show it instead. The default ISO prefix is
+`Heart Of The Alien (U)`, and the default music prefix follows the ISO prefix.
+The level 1 password is `BDXF`.
 
 `alien.exe --help` prints the full option list.
 
@@ -199,6 +205,8 @@ default music prefix follows the ISO prefix. The level 1 password is `BDXF`.
 | Flag | What it does |
 | --- | --- |
 | `--fastest` | Disable the speed throttle (mainly for tests and recording playback). |
+| `--skip-password` | After the intro, start level 1 directly instead of showing the code-entry screen. **Default.** |
+| `--no-skip-password` | Show the original code-entry/level-select screen after the intro. |
 | `--help` | Print the option list and exit. |
 
 ### Developer and test flags
@@ -277,7 +285,7 @@ CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged with
 
 ## Tests
 
-- `tests/run-tests.ps1` — headless Windows suite: 39 checks covering option
+- `tests/run-tests.ps1` — headless Windows suite: 40 checks covering option
   validation, the intro, every room, every upscaler, both renderers, the key
   binding parser and recorded playthroughs. Game data is expected at
   `tests/work/game.iso`.
@@ -316,6 +324,16 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Q: It runs slowly / OpenGL is missing.**
   A: Try `--no-hd`; the SDL renderer needs no OpenGL at all.
 
+- **Q: Why does the game logic run at 12fps? Can it run at 30 or 60?**
+  A: The original is a frame-based cinematic game: scripts, animation tables,
+  movement deltas, collision windows and timers are all authored per frame at
+  roughly 12fps. Rendering at 60fps would just repeat the same frames. Running
+  the script at 30fps would make the game 2.5× faster, because movement and
+  timers advance once per script frame. A 30fps mode *without* changing the
+  game's velocity would require retiming every script and animation, which is a
+  separate data/VM project. Quick taps are latched, so a press is never lost,
+  but an action still takes effect on the next script frame (up to ~83ms).
+
 ## Credits
 
 ### The original game
@@ -349,7 +367,7 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Lior Halphon** — author of the **Omniscale** pixel-art shader (MIT), and
   **hunterk** for the RetroArch GLSL port used in `src/omniscale_shader.h`.
 
-### This 2.0.1 / 2.0.2 fork
+### This 2.0.1 / 2.0.3 fork
 
 - **Jorge Salgueiro** — SDL3/OpenGL HD renderer, adjustable Omniscale
   smoothing, key binding system, renderer/screenshot fixes, the bug fixes
@@ -384,6 +402,38 @@ included in this repository.
 - *Another World* by Éric Chahi: <https://www.anotherworld.fr/>
 
 ## Changelog
+
+### 2.0.3
+
+Controls and startup:
+
+- Added: the password/code-entry screen is skipped by default after the intro;
+  `--no-skip-password` restores it, and the setup screen has a **Skip password**
+  row (default **Yes**)
+- Improved: one-frame key taps are latched, so a quick shot, jump or step
+  is registered even when the key is released before the next game frame
+- Fixed: Start (Enter) now really opens password entry from the game-over
+  screen instead of trying to load room 9
+- Fixed: the game no longer runs a burst of catch-up frames after a long
+  stall, which could skip over player input
+- Added: regression recording for the game-over -> Start -> password path
+
+Fixes:
+
+- Fixed: collision and sprite insertion bounds for corrupt sprite lists
+- Fixed: another Scale3x neighbour test (the middle-right pixel of the 3x3
+  block)
+- Fixed: animation delta output/back-reference bounds
+- Fixed: sample length arithmetic could overflow for corrupt sample data
+- Fixed: quicksave no longer writes a save before the room's first screen is
+  ready, and quicksave/quickload are ignored during the intro
+- Fixed: `--help` now lists `--no-sound`
+- Fixed: UTF-8 argument conversion falls back cleanly to the normal argv if
+  it cannot allocate or convert
+
+Tests:
+
+- 40 headless checks, including the one-frame Start press and UTF-8 paths
 
 ### 2.0.2
 

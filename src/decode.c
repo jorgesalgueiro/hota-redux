@@ -229,6 +229,7 @@ void collision_against_set()
 	short d2, d3;
 	int d4, d5, d6, d7;
 	int flipped;
+	int guard = 0;
 
 	/* op_28 collision detection! */
 	d2 = d3 = 0;
@@ -255,6 +256,13 @@ void collision_against_set()
 	LOG(("\n\n"));
 
 	entry_trg = first_sprite;
+	if (!valid_sprite(entry_trg))
+	{
+		LOG(("collision_against_set: invalid sprite list\n"));
+		set_variable(2, 0);
+		set_variable(3, 0);
+		return;
+	}
 
 	/* a3 is source */
 
@@ -263,6 +271,11 @@ void collision_against_set()
 	d7 = sprites[entry_src].w5 + sprites[entry_src].u7;
 
 	loop:
+	if (!valid_sprite(entry_trg))
+	{
+		goto done;
+	}
+
 	if (entry_src == entry_trg)
 	{
 		/* same sprite, cant collide */
@@ -364,13 +377,19 @@ void collision_against_set()
 	LOG(("colides with d3=%d d2=%d\n", d3, d2));
 
 	next_sprite:
+	if (!valid_sprite(entry_trg))
+	{
+		goto done;
+	}
+
 	entry_trg = sprites[entry_trg].next;
-	if (entry_trg != 0)
+	if (entry_trg != 0 && guard++ < MAX_SPRITES)
 	{
 		/* more sprites to check collision against */
 		goto loop;
 	}
 
+done:
 	LOG(("leaving op28 with d2=%d, d3=%d\n", d2, d3));
 	set_variable(2, d2);
 	set_variable(3, d3);
@@ -943,6 +962,12 @@ void add_sprite()
 			/* else */
 			entry_a6 = entry_a4;
 			entry_a4 = d1;
+			if (!valid_sprite(entry_a4))
+			{
+				LOG(("add_sprite: broken sprite list (next=%d)\n", entry_a4));
+				return;
+			}
+
 			if (d0 < sprites[entry_a4].u1)
 			{
 				goto loc_bd34;
@@ -1996,6 +2021,13 @@ int decode(int current_task, int start_pc)
 					play_animation("END4.BIN", 0);
 
 					/* return to password selection */
+					next_script = 7;
+					leave = 1;
+				}
+				else if (next_script == 9)
+				{
+					/* leaving the game-over screen with Start
+					 * returns to the password selection screen */
 					next_script = 7;
 					leave = 1;
 				}

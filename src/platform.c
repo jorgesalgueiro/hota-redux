@@ -65,6 +65,11 @@ FILE *hota_fopen(const char *path, const char *mode)
 	wchar_t *wpath;
 	FILE *fp;
 
+	if (path == NULL || mode == NULL)
+	{
+		return NULL;
+	}
+
 	wpath = utf8_to_wide(path);
 	if (wpath == NULL)
 	{
@@ -127,26 +132,37 @@ char **hota_utf8_argv(int *argc)
 			NULL, 0, NULL, NULL);
 		if (length <= 0)
 		{
-			continue;
+			goto fail;
 		}
 
 		argv[i] = (char *)malloc((size_t)length);
 		if (argv[i] == NULL)
 		{
-			continue;
+			goto fail;
 		}
 
 		if (WideCharToMultiByte(CP_UTF8, 0, wide_argv[i], -1,
 			argv[i], length, NULL, NULL) <= 0)
 		{
-			free(argv[i]);
-			argv[i] = NULL;
+			goto fail;
 		}
 	}
 
 	LocalFree(wide_argv);
 	*argc = count;
 	return argv;
+
+fail:
+	free(argv[i]);
+	while (i > 0)
+	{
+		i--;
+		free(argv[i]);
+	}
+
+	free(argv);
+	LocalFree(wide_argv);
+	return NULL;
 }
 
 #endif /* _WIN32 */

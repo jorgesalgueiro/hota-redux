@@ -9,7 +9,7 @@ Entertainment. It is the sequel to *Another World* by Éric Chahi.
 - Gil Megidish <gilm@users.sourceforge.net> — original Redux engine (2004-2005)
 - M-HT — contributions to the original engine
 - carstene1ns — 2.0.0 SDL3 port and upstream maintenance
-- Jorge Salgueiro — 2.0.1/2.0.2 fork (HD renderer, smoothing, key bindings,
+- Jorge Salgueiro — 2.0.1/2.0.3 fork (HD renderer, smoothing, key bindings,
   setup screen, fixes)
 
-The 2.0.1/2.0.2 fork was made with the help of opencode and DeepSeek.
+The 2.0.1/2.0.3 fork was made with the help of opencode and DeepSeek.

@@ -109,9 +109,16 @@ void play_sample(int index, int volume, int channel)
 	}
 
 	int ptr = get_long(table_entry);
-	int length = (ptr > 0 && ptr + 4 <= VM_MEMORY_SIZE) ? get_long(ptr) : 0;
+	int length;
 
-	if (length <= 0 || ptr + 8 + length > VM_MEMORY_SIZE)
+	if (ptr <= 0 || ptr + 8 > VM_MEMORY_SIZE)
+	{
+		LOG(("play_sample: invalid sample %d offset 0x%x\n", index, ptr));
+		return;
+	}
+
+	length = get_long(ptr);
+	if (length <= 0 || length > VM_MEMORY_SIZE - ptr - 8)
 	{
 		LOG(("play_sample: invalid sample %d (offset 0x%x, length %d)\n",
 			index, ptr, length));

@@ -130,7 +130,7 @@ void upscale3x(unsigned char *dst, int dst_pitch,
 				(b == f && b != d && f != h && e != a)) ? d : e;
 			e4 = e;
 			e5 = ((b == f && b != d && f != h && e != i) ||
-				(h == f && d != h && b != f && e != c)) ? f : e;
+				(d == h && d != b && h != f && e != c)) ? f : e;
 			e6 = (d == h && d != b && h != f) ? d : e;
 			e7 = ((d == h && d != b && h != f && e != i) ||
 				(h == f && d != h && b != f && e != g)) ? h : e;

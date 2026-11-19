@@ -151,6 +151,8 @@ Check '--help' {
     $r = Invoke-Game @('--help') 10
     if (-not $r.Exited) { throw 'did not exit' }
     if ($r.StdOut -notmatch 'Heart of The Alien Redux') { throw 'missing banner' }
+    if ($r.StdOut -notmatch '--skip-password') { throw 'missing skip-password option' }
+    if ($r.StdOut -notmatch '--no-skip-password') { throw 'missing no-skip-password option' }
 }
 
 Check 'launcher --print-options' {
@@ -160,6 +162,7 @@ Check 'launcher --print-options' {
     if ($LASTEXITCODE -ne 0) { throw "launcher exited with $LASTEXITCODE" }
     if ($out -notmatch '"renderer"') { throw "no settings in output: $out" }
     if ($out -notmatch 'ARGS:') { throw "no argument line in output: $out" }
+    if ($out -notmatch '--skip-password') { throw "missing default skip-password: $out" }
 }
 
 Check '--room validation (9 is invalid)' {
@@ -301,7 +304,8 @@ Check 'smooth Scale2x/3x upscaling' {
 $replays = @(
     @{ Name = 'level1'; Room = 1 },
     @{ Name = 'level2'; Room = 2 },
-    @{ Name = 'boss';   Room = 7 }
+    @{ Name = 'boss';   Room = 7 },
+    @{ Name = 'gameover-start'; Room = 1 }
 )
 
 foreach ($replay in $replays) {

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22...4.3 FATAL_ERROR)
 
-project(hota-redux VERSION 2.0.2 LANGUAGES C
+project(hota-redux VERSION 2.0.3 LANGUAGES C
 	DESCRIPTION "Heart of The Alien Redux"
 	HOMEPAGE_URL "")
 set(PROJECT_BUGREPORT "https://github.com/carstene1ns/hota-redux/issues")

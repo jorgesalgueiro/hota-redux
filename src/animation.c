@@ -84,12 +84,15 @@ static void fillline(unsigned char *screen, int offset, int count, int color)
 	}
 }
 
-static void unpack_animation_delta(int offset, unsigned char *out)
+static void unpack_animation_delta(int offset, unsigned char *out,
+	unsigned char *out_end)
 {
 	int a5;
 	unsigned char *src;
+	unsigned char *out_start;
 	int d0, d2, d3, d5, d6, d7, d1;
 
+	out_start = out;
 	a5 = offset;
 
 	/* bug in the original code, assumes offset < 0x100 */
@@ -104,6 +107,10 @@ static void unpack_animation_delta(int offset, unsigned char *out)
 	*/
 
 	d0 = get_byte(offset) >> 4;
+	if (out >= out_end)
+	{
+		return;
+	}
 	*out++ = d0;
 
 	d6 = 0;
@@ -125,6 +132,10 @@ static void unpack_animation_delta(int offset, unsigned char *out)
 		d2 = get_byte(offset++) & d7;
 	}
 
+	if (out >= out_end)
+	{
+		return;
+	}
 	*out++ = d2;
 	d6 = ~d6;
 
@@ -216,8 +227,13 @@ static void unpack_animation_delta(int offset, unsigned char *out)
 	}
 
 	d2++;
+	if (d3 <= 0 || out - d3 < out_start)
+	{
+		return;
+	}
+
 	src = out - d3;
-	while (d2 >= 0)
+	while (d2 >= 0 && out < out_end)
 	{
 		*out++ = *src++;
 		d2--;
@@ -760,7 +776,7 @@ int play_sequence(int offset, int fps)
 		/* XXX: move into a local array */
 		a0 = 0xdc000;
 		ptr = get_memory_ptr(a0);
-		unpack_animation_delta(a2, ptr);
+		unpack_animation_delta(a2, ptr, ptr + (VM_MEMORY_SIZE - a0));
 		a2 = a0;
 		a3 = a0 + d4;
 		anim_interesting(a1, a2, a3, (unsigned short)d3);

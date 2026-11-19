@@ -1,5 +1,5 @@
 # =====================================================================
-#  Heart of The Alien Redux 2.0.2 - setup / configuration screen
+#  Heart of The Alien Redux 2.0.3 - setup / configuration screen
 #
 #  A small BIOS/DOS-style menu for the Windows launcher. It shows the
 #  current options next to their defaults, lets the player change them
@@ -60,6 +60,7 @@ $script:defaults = [ordered]@{
     music      = ''
     keyfile    = 'keys.txt'
     room       = 0
+    skippassword = 'on'
 }
 
 $script:cfg = [ordered]@{}
@@ -148,6 +149,11 @@ $script:fields = @(
         Values = @(0, 1, 2, 3, 4, 5, 6, 7, 8)
         Names = @('Normal flow', 'Room 1', 'Room 2', 'Room 3', 'Room 4', 'Room 5', 'Room 6', 'Room 7', 'Room 8')
         Help = 'Developer option: skip the intro and start in a room'
+    },
+    [pscustomobject]@{
+        Key = 'skippassword'; Label = 'Skip password'; Kind = 'choice'
+        Values = @('off', 'on'); Names = @('No', 'Yes')
+        Help = 'Normal flow: skip the code-entry screen after the intro and start room 1'
     }
 )
 
@@ -452,6 +458,13 @@ function Build-Args {
         $result.Add([string]$config['room'])
     }
 
+    if ($config['skippassword'] -eq 'off') {
+        $result.Add('--no-skip-password')
+    }
+    else {
+        $result.Add('--skip-password')
+    }
+
     foreach ($extra in $script:extraArgs) {
         $result.Add($extra)
     }
@@ -522,7 +535,7 @@ function Show-Menu {
     Clear-Host
 
     Write-Host $line -ForegroundColor DarkCyan
-    Write-Host ('| {0,-76} |' -f ' HEART OF THE ALIEN REDUX 2.0.2  -  SETUP / CONFIGURATION') -ForegroundColor White
+    Write-Host ('| {0,-76} |' -f ' HEART OF THE ALIEN REDUX 2.0.3  -  SETUP / CONFIGURATION') -ForegroundColor White
     Write-Host ('| {0,-76} |' -f ' The options below are used the next time the game starts.') -ForegroundColor Gray
     Write-Host $line -ForegroundColor DarkCyan
 
