@@ -15,7 +15,9 @@ It was made by **Jorge Salgueiro** with the help of **opencode** and
 **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
-> provide its ISO image (and optionally the CD music) yourself.
+> provide its ISO image (and optionally the CD music) yourself. Game data is
+> copyrighted: the `Heart Of The Alien (U)` folder, ISO images and CD audio
+> tracks are ignored by git and must never be committed to this repository.
 
 ---
 

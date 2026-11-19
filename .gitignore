@@ -16,9 +16,11 @@ hota-screenshot.png
 # release artifact (attach the zip to a GitHub release instead)
 /hota-redux-*-win64.zip
 
-# game data
+# game data - never commit these (copyrighted)
 *.iso
+*.ISO
 *.cue
+*.CUE
 *.bin
 /Heart Of The Alien (U)/
 
@@ -28,4 +30,12 @@ hota-screenshot.png
 *.SND
 
 *.ogg
+*.OGG
 *.mp3
+*.MP3
+*.wav
+*.WAV
+*.flac
+*.FLAC
+*.opus
+*.OPUS
