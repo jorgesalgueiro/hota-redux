@@ -28,6 +28,9 @@ int audio_init();
 /** callback when game script has been unloaded */
 void audio_done();
 
+/** Applies cls.music_volume, cls.sfx_volume and cls.muted to the mixer. */
+void audio_apply_volumes(void);
+
 /** Purges all cached sound effects from memory
 
     Releases memory taken by sfx previously played by play_sample()

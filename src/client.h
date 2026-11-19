@@ -37,6 +37,10 @@ typedef struct
 	int hd;      /* render at native window resolution with OpenGL */
 	int hd_sharp; /* 1 = nearest shader, 0 = Omniscale in HD mode */
 	int hd_smooth; /* Omniscale strength 0-100 (100 = full smoothing) */
+	int music_volume; /* 0-100 */
+	int sfx_volume;   /* 0-100 */
+	int muted;
+	int integer_scale; /* 1 = pixel-perfect integer scaling */
 	bool use_iso;
 	char *iso_prefix;
 	char *music_prefix;

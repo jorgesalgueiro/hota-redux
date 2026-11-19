@@ -84,6 +84,7 @@ int fullscreen_flag = 0;
 int fastest_flag = 0;
 int check_keys_flag = 0;
 int skip_password_flag = 1;
+int integer_scale_flag = -1; /* -1 = use video.cfg, 0/1 = command line */
 
 short task_pc[64];
 short new_task_pc[64];
@@ -99,6 +100,13 @@ static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_selec
 static int held_up, held_down, held_left, held_right;
 static int held_a, held_b, held_c, held_start, held_reset;
 static int reset_requested = 0;
+
+/* Gamepad state. The pad is polled once per frame for held buttons and
+ * axes; button-down events also set the one-frame tap latches. */
+#define JOY_DEADZONE 12000
+static SDL_Gamepad *gamepad = NULL;
+static int pad_up, pad_down, pad_left, pad_right;
+static int pad_a, pad_b, pad_c, pad_select;
 
 /* A tap shorter than one game frame produces a key-down and a key-up
  * event before the script runs. These latches keep that tap visible for
@@ -131,10 +139,6 @@ FILE *record_fp = 0;
 static unsigned char scratchpad[29184];
 
 
-#ifdef ENABLE_DEBUG
-short old_var[256+64*32];
-#endif
-
 static int load_room(int index)
 {
 	char filename[32];
@@ -152,6 +156,7 @@ static int load_room(int index)
 	ptr = get_memory_ptr(0xf900);
 	if (read_file(filename, ptr) < 0)
 	{
+		fprintf(stderr, "Could not read %s from the game data.\n", filename);
 		panic("load_room failed");
 		return -1;
 	}
@@ -168,6 +173,12 @@ static int load_room(int index)
 */
 static void atexit_callback()
 {
+	if (gamepad != NULL)
+	{
+		SDL_CloseGamepad(gamepad);
+		gamepad = NULL;
+	}
+
 	render_done();
 	audio_done();
 	SDL_Quit();
@@ -184,13 +195,29 @@ static void atexit_callback()
 
 static int initialize()
 {
-	if (!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO))
+	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
-		fprintf(stderr, "failed to initialize SDL: %s\n", SDL_GetError());
+		fprintf(stderr, "failed to initialize SDL video: %s\n", SDL_GetError());
 		return -1;
 	}
 
 	atexit(atexit_callback);
+
+	/* Audio and gamepad are optional. Headless machines and remote
+	 * sessions often have no audio device; the game must still run. */
+	if (cls.nosound == 0)
+	{
+		if (!SDL_InitSubSystem(SDL_INIT_AUDIO))
+		{
+			fprintf(stderr, "audio disabled: %s\n", SDL_GetError());
+			cls.nosound = 1;
+		}
+	}
+
+	if (!SDL_InitSubSystem(SDL_INIT_GAMEPAD))
+	{
+		fprintf(stderr, "gamepad support disabled: %s\n", SDL_GetError());
+	}
 
 	keymap_init(keymap_filename);
 
@@ -211,6 +238,8 @@ static int initialize()
 
 	if (game2bin_init() < 0)
 	{
+		fprintf(stderr, "Could not read GAME2.BIN from the game data.\n");
+		fprintf(stderr, "Check that the ISO (or loose game files) is present and that --iso points to the right prefix.\n");
 		panic("can't read GAME2.BIN file");
 		return -1;
 	}
@@ -367,14 +396,14 @@ void update_keys()
 	}
 	else
 	{
-		up = key_up || pressed_up;
-		down = key_down || pressed_down;
-		left = key_left || pressed_left;
-		right = key_right || pressed_right;
-		a = key_a || pressed_a;
-		b = key_b || pressed_b;
-		c = key_c || pressed_c;
-		select = key_select || pressed_start;
+		up = key_up || pressed_up || pad_up;
+		down = key_down || pressed_down || pad_down;
+		left = key_left || pressed_left || pad_left;
+		right = key_right || pressed_right || pad_right;
+		a = key_a || pressed_a || pad_a;
+		b = key_b || pressed_b || pad_b;
+		c = key_c || pressed_c || pad_c;
+		select = key_select || pressed_start || pad_select;
 	}
 
 	toggle_aux(0);           /* me and my paranoia */
@@ -642,8 +671,70 @@ static void release_all_keys()
 	held_a = held_b = held_c = held_start = held_reset = 0;
 	pressed_up = pressed_down = pressed_left = pressed_right = 0;
 	pressed_a = pressed_b = pressed_c = pressed_start = 0;
+	pad_up = pad_down = pad_left = pad_right = 0;
+	pad_a = pad_b = pad_c = pad_select = 0;
 	reset_requested = 0;
 	speed_throttle = 0;
+}
+
+/** Opens the first connected gamepad, if any. */
+static void gamepad_open_first(void)
+{
+	int count = 0;
+	SDL_JoystickID *ids;
+
+	if (gamepad != NULL)
+	{
+		return;
+	}
+
+	ids = SDL_GetGamepads(&count);
+	if (ids == NULL)
+	{
+		return;
+	}
+
+	if (count > 0)
+	{
+		gamepad = SDL_OpenGamepad(ids[0]);
+		if (gamepad != NULL)
+		{
+			LOG(("opened gamepad %d\n", (int)ids[0]));
+		}
+	}
+
+	SDL_free(ids);
+}
+
+/** Refreshes the held state of the gamepad. */
+static void poll_gamepad(void)
+{
+	int axis_x = 0;
+	int axis_y = 0;
+
+	if (gamepad == NULL)
+	{
+		pad_up = pad_down = pad_left = pad_right = 0;
+		pad_a = pad_b = pad_c = pad_select = 0;
+		return;
+	}
+
+	axis_x = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTX);
+	axis_y = SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFTY);
+
+	pad_left = axis_x < -JOY_DEADZONE ||
+		SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_LEFT);
+	pad_right = axis_x > JOY_DEADZONE ||
+		SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_RIGHT);
+	pad_up = axis_y < -JOY_DEADZONE ||
+		SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_UP);
+	pad_down = axis_y > JOY_DEADZONE ||
+		SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_DPAD_DOWN);
+
+	pad_a = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_SOUTH);
+	pad_b = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_WEST);
+	pad_c = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_EAST);
+	pad_select = SDL_GetGamepadButton(gamepad, SDL_GAMEPAD_BUTTON_START);
 }
 
 /** Processes SDL events
@@ -659,6 +750,92 @@ void check_events()
 	{
 	        switch (event.type) 
 		{
+			case SDL_EVENT_GAMEPAD_ADDED:
+			if (gamepad == NULL)
+			{
+				gamepad = SDL_OpenGamepad(event.gdevice.which);
+				if (gamepad != NULL)
+				{
+					LOG(("opened gamepad %d\n", (int)event.gdevice.which));
+				}
+			}
+			break;
+
+			case SDL_EVENT_GAMEPAD_REMOVED:
+			if (gamepad != NULL &&
+				SDL_GetGamepadID(gamepad) == event.gdevice.which)
+			{
+				SDL_CloseGamepad(gamepad);
+				gamepad = NULL;
+				poll_gamepad();
+				gamepad_open_first();
+			}
+			break;
+
+			case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+			if (gamepad != NULL &&
+				SDL_GetGamepadID(gamepad) == event.gbutton.which)
+			{
+				switch (event.gbutton.button)
+				{
+					case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
+					pressed_right = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
+					pressed_left = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_DPAD_UP:
+					pressed_up = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
+					pressed_down = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_SOUTH:
+					pressed_a = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_WEST:
+					pressed_b = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_EAST:
+					pressed_c = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_START:
+					pressed_start = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_NORTH:
+					toggle_filter();
+					break;
+
+					case SDL_GAMEPAD_BUTTON_BACK:
+					cls.quit = 1;
+					break;
+
+					case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
+					quicksave();
+					break;
+
+					case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
+					quickload();
+					break;
+
+					default:
+					break;
+				}
+			}
+			break;
+
+			case SDL_EVENT_GAMEPAD_BUTTON_UP:
+			/* held state is refreshed by poll_gamepad() */
+			break;
+
 			case SDL_EVENT_KEY_UP:
 			/* Ignore modifiers here: the player may release Ctrl or
 			 * Alt before releasing the bound key. */
@@ -817,6 +994,11 @@ void check_events()
 					reset_requested = 1;
 				}
 			}
+			if (keymap_matches(KM_MUTE, event.key.key, event.key.mod))
+			{
+				cls.muted = !cls.muted;
+				audio_apply_volumes();
+			}
 			if (keymap_matches(KM_QUICKSAVE, event.key.key, event.key.mod))
 			{
 				quicksave();
@@ -849,6 +1031,10 @@ void check_events()
 			{
 				toggle_filter();
 			}
+			if (keymap_matches(KM_INTEGER, event.key.key, event.key.mod))
+			{
+				toggle_integer_scale();
+			}
 			if (keymap_matches(KM_QUIT, event.key.key, event.key.mod))
 			{
 				cls.quit = 1;
@@ -862,14 +1048,28 @@ void check_events()
 		case SDL_EVENT_WINDOW_FOCUS_LOST:
 		case SDL_EVENT_WINDOW_MINIMIZED:
 			/* key-up events go to the other window, so forget any
-			 * key that is still held */
+			 * key that is still held, and pause the game */
 			release_all_keys();
+			cls.paused = 1;
+			break;
+
+		case SDL_EVENT_WINDOW_FOCUS_GAINED:
+		case SDL_EVENT_WINDOW_RESTORED:
+			if (cls.paused)
+			{
+				/* resume without trying to replay the paused time */
+				cls.paused = 0;
+				last_tick = SDL_GetTicks();
+				last_tick_fp = 0;
+			}
 			break;
 
 		default:
 			break;
 		}
 	}
+
+	poll_gamepad();
 }
 
 void rest(int fps)
@@ -1031,6 +1231,14 @@ static void run()
 
 		check_events();
 
+		if (cls.paused)
+		{
+			/* keep the event loop responsive while the window is
+			 * in the background */
+			SDL_Delay(16);
+			continue;
+		}
+
 		if (reset_requested)
 		{
 			reset_requested = 0;
@@ -1166,8 +1374,13 @@ void sprite_test()
 		}
 
 		check_events();
-		rest(12);
+		if (cls.paused)
+		{
+			SDL_Delay(16);
+			continue;
+		}
 
+		rest(12);
 		update_keys();
 
 		if (get_variable(252) == 1)
@@ -1227,9 +1440,7 @@ static void help()
 {
 	printf("Heart of The Alien Redux %s\n", HOTA_VERSION);
 	puts("USAGE:");
-	#ifdef ENABLE_DEBUG
-	puts("\t--debug        turn on debugging");
-	#endif
+	puts("\t--debug        turn on debugging output");
 	puts("\t--scale x      window scale factor <x> (0 = auto)");
 	puts("\t--upscale n    internal upscaling 1-4 (0 = auto)");
 	puts("\t--smooth       use Scale2x/3x smoothing (default: sharp)");
@@ -1238,8 +1449,12 @@ static void help()
 	puts("\t--no-hd        disable HD, use the SDL renderer");
 	puts("\t--sharp        HD: nearest shader instead of Omniscale");
 	puts("\t--hd-smooth n  HD: Omniscale diagonal smoothing 0-100 (default: 30)");
+	puts("\t--integer-scale    pixel-perfect integer scaling (black borders)");
+	puts("\t--no-integer-scale fractional/letterbox scaling (default)");
 	puts("\t--fullscreen   start in fullscreen");
 	puts("\t--no-sound     disable music and sound effects");
+	puts("\t--music-volume n  music volume 0-100 (default: 100)");
+	puts("\t--sfx-volume n    sound effects volume 0-100 (default: 100)");
 	puts("\t--skip-password   skip the code entry screen (default)");
 	puts("\t--no-skip-password show the original code entry screen");
 	puts("\t--room n       start from room <n>");
@@ -1269,6 +1484,8 @@ static struct parg_option options[] =
 	{"intro-test", PARG_NOARG, &test_flag, 2},
 	{"help", PARG_NOARG, NULL, 'h'},
 	{"no-sound", PARG_NOARG, NULL, 'n'},
+	{"music-volume", PARG_REQARG, NULL, 'M'},
+	{"sfx-volume", PARG_REQARG, NULL, 'V'},
 	{"fullscreen", PARG_NOARG, &fullscreen_flag, 1},
 	{"record", PARG_NOARG, &record_flag, 1},
 	{"replay", PARG_NOARG, &replay_flag, 1},
@@ -1280,6 +1497,8 @@ static struct parg_option options[] =
 	{"no-hd", PARG_NOARG, &cls.hd, 0},
 	{"sharp", PARG_NOARG, &cls.hd_sharp, 1},
 	{"hd-smooth", PARG_REQARG, NULL, 'S'},
+	{"integer-scale", PARG_NOARG, &integer_scale_flag, 1},
+	{"no-integer-scale", PARG_NOARG, &integer_scale_flag, 0},
 	{"fastest", PARG_NOARG, &fastest_flag, 1},
 	{0, 0, 0, 0}
 };
@@ -1362,6 +1581,10 @@ int main(int argc, char **argv)
 	cls.hd = 1;
 	cls.hd_sharp = 0;
 	cls.hd_smooth = 30;
+	cls.music_volume = 100;
+	cls.sfx_volume = 100;
+	cls.muted = 0;
+	cls.integer_scale = 0;
 	cls.fullscreen = 0;
 	cls.speed_throttle = 0;
 	cls.paused = 0;
@@ -1374,7 +1597,7 @@ int main(int argc, char **argv)
 	struct parg_state ps;
 	parg_init(&ps);
 	int c;
-	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:k:S:", options, NULL)) != -1)
+	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:k:S:M:V:", options, NULL)) != -1)
 	{
 		switch(c)
 		{
@@ -1439,6 +1662,24 @@ int main(int argc, char **argv)
 
 			case 'n':
 			cls.nosound = 1;
+			break;
+
+			case 'M':
+			if (parse_int(ps.optarg, &cls.music_volume) < 0 ||
+				cls.music_volume < 0 || cls.music_volume > 100)
+			{
+				fprintf(stderr, "invalid music volume '%s' (valid: 0-100)\n", ps.optarg);
+				return 1;
+			}
+			break;
+
+			case 'V':
+			if (parse_int(ps.optarg, &cls.sfx_volume) < 0 ||
+				cls.sfx_volume < 0 || cls.sfx_volume > 100)
+			{
+				fprintf(stderr, "invalid sound volume '%s' (valid: 0-100)\n", ps.optarg);
+				return 1;
+			}
 			break;
 
 			case 'i':
@@ -1523,6 +1764,8 @@ int main(int argc, char **argv)
 		}
 		return 1;
 	}
+
+	gamepad_open_first();
 
 	if (test_flag == 1 && next_script == 0)
 	{

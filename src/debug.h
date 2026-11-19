@@ -5,11 +5,9 @@
 
 extern int debug_flag;
 
-#ifdef ENABLE_DEBUG
+/* Logging is always compiled in and selected at runtime with --debug.
+ * Keeping it in release builds makes user bug reports much easier. */
 #define LOG(x) if (debug_flag) { printf x; }
-#else
-#define LOG(x)
-#endif
 
 void mark_opcode(int opcode);
 void print_hex(unsigned char *ptr, int length);

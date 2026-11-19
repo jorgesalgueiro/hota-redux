@@ -86,6 +86,17 @@ Alien* itself remains the work of its original creators — see
 - **No password needed.** After the intro the game starts level 1 directly.
   The original code-entry screen is still available with
   `--no-skip-password` or from the setup screen.
+- **Gamepad support.** Hot-plugged SDL3 controllers work out of the box
+  (D-pad/stick, A/B/C, Start, quicksave/quickload shoulders).
+- **Volume and mute.** Set music/SFX levels with `--music-volume` and
+  `--sfx-volume`, or press <kbd>M</kbd> to mute.
+- **Pause on focus loss.** Alt-tabbing pauses the game instead of letting it
+  run in the background.
+- **Integer scaling and remembered window size.** Toggle pixel-perfect integer
+  scaling with <kbd>I</kbd>; the window size and scaling mode are saved in
+  `video.cfg` and restored on the next start.
+- **Cross-platform launcher.** `play.py`/`play.sh` provide the same setup
+  screen and `play.cfg` on Linux and macOS.
 
 ### Under the hood
 
@@ -94,7 +105,7 @@ Alien* itself remains the work of its original creators — see
   (see the [changelog](#changelog)).
 - **Bounds checking** for corrupt or unexpected sprite, save and path data, so
   a bad file gives a warning instead of a crash.
-- **Regression suite.** `tests/run-tests.ps1` runs 40 headless scenarios
+- **Regression suite.** `tests/run-tests.ps1` runs 43 headless scenarios
   (startup, every room, every upscaler, HD and SDL renderers, key binding
   parsing, recorded playthroughs) and `tests/run-asan.sh` runs the same kind
   of checks under AddressSanitizer/UBSan on Linux.
@@ -132,7 +143,8 @@ Alien* itself remains the work of its original creators — see
    on the setup screen.
 
 The setup screen shows the current value of each option next to its built-in
-default, including **Skip password** (on by default). Use the arrow keys to
+default, including **Skip password** (on by default), **Integer scaling** and
+**Volume**. Use the arrow keys to
 move between rows and to change a value, <kbd>Enter</kbd> to edit a path or
 activate an action, <kbd>S</kbd> to start the game, <kbd>R</kbd> to restore
 the defaults and <kbd>Esc</kbd> to save and leave. Settings are stored in
@@ -152,6 +164,25 @@ play.bat --iso "My Rip"
 `play.ps1` is the setup screen itself. `play.bat` calls it with Windows
 PowerShell; if PowerShell or `play.ps1` is missing, `play.bat` falls back to
 the old direct launch with the recommended settings.
+
+### Linux and macOS
+
+Build the game with SDL3 and SDL3_mixer, then run:
+
+```
+chmod +x play.sh play.py   # once, if your checkout lost the executable bit
+./play.sh
+```
+
+`play.sh` uses the cross-platform setup screen in `play.py` (Python 3). It
+reads and writes the same `play.cfg` as the Windows launcher, so settings are
+shared. If Python 3 is unavailable, `play.sh` falls back to a direct launch
+with the recommended settings. Command line arguments still start immediately:
+
+```
+./play.sh --fullscreen
+./play.sh --iso "My Rip"
+```
 
 ### From the command line
 
@@ -182,6 +213,13 @@ The level 1 password is `BDXF`.
 | `--smooth` | Classic renderer: use Scale2x/Scale3x smoothing instead of sharp scaling. |
 | `--filter` | Classic renderer: use bilinear hardware filtering. |
 | `--fullscreen` | Start in fullscreen (also `alt+enter` at runtime). |
+| `--integer-scale` | Pixel-perfect integer scaling with black borders. |
+| `--no-integer-scale` | Fractional/letterbox scaling. |
+
+The windowed size and integer-scaling setting are remembered in `video.cfg`
+next to the game. Delete that file to return to automatic sizing. An explicit
+`--scale` still overrides the remembered size; on the setup screen,
+**Integer scaling** defaults to **Auto (remembered)**.
 
 ### Game data
 
@@ -207,13 +245,16 @@ The level 1 password is `BDXF`.
 | `--fastest` | Disable the speed throttle (mainly for tests and recording playback). |
 | `--skip-password` | After the intro, start level 1 directly instead of showing the code-entry screen. **Default.** |
 | `--no-skip-password` | Show the original code-entry/level-select screen after the intro. |
+| `--music-volume n` | Music volume, `0`–`100` (default `100`). |
+| `--sfx-volume n` | Sound-effect volume, `0`–`100` (default `100`). |
+| `--no-sound` | Disable music and sound effects entirely. |
 | `--help` | Print the option list and exit. |
 
 ### Developer and test flags
 
 | Flag | What it does |
 | --- | --- |
-| `--debug` | Verbose debug output (debug builds). |
+| `--debug` | Verbose debug output (works in release builds too). |
 | `--intro-test` | Play every animation and exit when done. |
 | `--sprite-test` | Show the sprites of the current room (combine with `--room`). |
 
@@ -231,8 +272,27 @@ available on both `Z`/`X`/`C` and `A`/`S`/`D`:
 - <kbd>F2</kbd>              cycle internal upscaling (classic renderer)
 - <kbd>F3</kbd>              toggle sharp / smooth rendering
 - <kbd>F</kbd>               toggle bilinear filtering, or Omniscale in HD mode
+- <kbd>I</kbd>               toggle pixel-perfect integer scaling
+- <kbd>M</kbd>               mute / unmute music and sound effects
 - <kbd>F12</kbd>             save a high-resolution screenshot
 - <kbd>ESC</kbd>             leave the game, or skip an animation
+
+The game pauses automatically when the window loses focus and resumes when you
+return.
+
+### Gamepad
+
+A connected gamepad is detected automatically (hot-plug works):
+
+- D-pad or left stick — move
+- South / West / East face buttons — actions A / B / C
+- Start — start / select (continue and password screens)
+- North — toggle the HD filter
+- Back — quit
+- Left/right shoulder — quicksave / quickload
+
+The gamepad mapping is currently fixed; keyboard bindings are configurable in
+`keys.txt`.
 
 ### Changing the keys
 
@@ -249,6 +309,9 @@ action a = z, a
 
 # start / select button
 start = enter, kpenter
+
+# mute / unmute
+mute = m
 
 screenshot = f12
 fullscreen = alt+enter
@@ -278,6 +341,19 @@ SDL3 and SDL3_mixer are needed (pkg-config, CMake packages or `CMAKE_PREFIX_PATH
 OpenGL is optional and only used by the HD renderer; without it the game builds
 and falls back to the plain SDL renderer automatically.
 
+On Ubuntu, install the development packages (or build SDL3 and SDL3_mixer from
+source into a prefix and pass it as `CMAKE_PREFIX_PATH`):
+
+```
+sudo apt install build-essential cmake libsdl3-dev libsdl3-mixer-dev
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+./play.sh
+```
+
+Ubuntu 24.04 does not ship SDL3 3.4 in its default repositories, so building
+SDL3 and SDL3_mixer from source into a local prefix is a good fallback.
+
 The Windows release in this repository is built with MinGW-w64 gcc 16.2,
 CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged with
 `play.bat`, `play.ps1`, `alien.exe`, `SDL3.dll`, `SDL3_mixer.dll`, `README.md`,
@@ -285,10 +361,12 @@ CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged with
 
 ## Tests
 
-- `tests/run-tests.ps1` — headless Windows suite: 40 checks covering option
+- `tests/run-tests.ps1` — headless Windows suite: 43 checks covering option
   validation, the intro, every room, every upscaler, both renderers, the key
   binding parser and recorded playthroughs. Game data is expected at
   `tests/work/game.iso`.
+- `tests/run-tests-linux.sh` — headless Linux suite: 37 checks covering the
+  same ground plus UTF-8 paths and both launchers.
 - `tests/run-asan.sh` — the same idea under AddressSanitizer and UBSan in WSL,
   using the `dummy` SDL video and audio drivers.
 
@@ -402,6 +480,22 @@ included in this repository.
 - *Another World* by Éric Chahi: <https://www.anotherworld.fr/>
 
 ## Changelog
+
+### Unreleased
+
+- Added: SDL3 gamepad support (D-pad/left stick, A/B/C, Start, hot-plug,
+  shoulders for quicksave/quickload)
+- Added: music and sound-effect volume (`--music-volume`, `--sfx-volume`)
+  and an <kbd>M</kbd> mute toggle
+- Added: the game pauses when the window loses focus
+- Added: `--debug` logging now works in release builds too
+- Improved: fatal errors go to stderr with a helpful game-data message
+- Added: cross-platform `play.py` / `play.sh` setup launcher sharing `play.cfg`
+  with the Windows launcher
+- Added: Linux regression suite (`tests/run-tests-linux.sh`), verified in
+  Ubuntu 24.04 with a local SDL3 build
+- Added: pixel-perfect integer scaling (`--integer-scale`, <kbd>I</kbd>)
+- Added: remembered window size and scaling mode in `video.cfg`
 
 ### 2.0.3
 

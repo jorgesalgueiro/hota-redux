@@ -54,8 +54,10 @@ $script:defaults = [ordered]@{
     smooth     = 'sharp'
     filter     = 'off'
     scale      = 0
+    integer    = 'auto'
     fullscreen = 'off'
     sound      = 'on'
+    volume     = 100
     iso        = 'Heart Of The Alien (U)'
     music      = ''
     keyfile    = 'keys.txt'
@@ -123,6 +125,11 @@ $script:fields = @(
         Help = 'Window size; Auto fits the desktop'
     },
     [pscustomobject]@{
+        Key = 'integer'; Label = 'Integer scaling'; Kind = 'choice'
+        Values = @('auto', 'on', 'off'); Names = @('Auto (remembered)', 'On', 'Off')
+        Help = 'Pixel-perfect integer scaling; Auto uses video.cfg'
+    },
+    [pscustomobject]@{
         Key = 'fullscreen'; Label = 'Fullscreen'; Kind = 'choice'
         Values = @('off', 'on'); Names = @('No', 'Yes')
         Help = 'Start in fullscreen; Alt+Enter toggles it in game'
@@ -131,6 +138,11 @@ $script:fields = @(
         Key = 'sound'; Label = 'Sound'; Kind = 'choice'
         Values = @('on', 'off'); Names = @('On', 'Off')
         Help = 'Turn CD music and sound effects off'
+    },
+    [pscustomobject]@{
+        Key = 'volume'; Label = 'Volume'; Kind = 'number'
+        Min = 0; Max = 100; Step = 10
+        Help = 'Music and sound effects volume, 0-100'
     },
     [pscustomobject]@{
         Key = 'iso'; Label = 'ISO prefix'; Kind = 'text'
@@ -427,6 +439,14 @@ function Build-Args {
         $result.Add([string]$config['scale'])
     }
 
+    if ($config['integer'] -eq 'on') {
+        $result.Add('--integer-scale')
+    }
+    elseif ($config['integer'] -eq 'off') {
+        $result.Add('--no-integer-scale')
+    }
+    # auto: leave it to video.cfg
+
     if ($config['fullscreen'] -eq 'on') {
         $result.Add('--fullscreen')
     }
@@ -434,6 +454,11 @@ function Build-Args {
     if ($config['sound'] -eq 'off') {
         $result.Add('--no-sound')
     }
+
+    $result.Add('--music-volume')
+    $result.Add([string][int]$config['volume'])
+    $result.Add('--sfx-volume')
+    $result.Add([string][int]$config['volume'])
 
     $iso = [string]$config['iso']
     if (-not [string]::IsNullOrWhiteSpace($iso)) {
@@ -536,7 +561,6 @@ function Show-Menu {
 
     Write-Host $line -ForegroundColor DarkCyan
     Write-Host ('| {0,-76} |' -f ' HEART OF THE ALIEN REDUX 2.0.3  -  SETUP / CONFIGURATION') -ForegroundColor White
-    Write-Host ('| {0,-76} |' -f ' The options below are used the next time the game starts.') -ForegroundColor Gray
     Write-Host $line -ForegroundColor DarkCyan
 
     Write-Host ('  {0,-2} {1,-26} {2,-21} {3,-21}' -f '', 'OPTION', 'CURRENT', 'DEFAULT') -ForegroundColor DarkGray

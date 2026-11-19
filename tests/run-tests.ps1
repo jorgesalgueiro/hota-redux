@@ -153,6 +153,9 @@ Check '--help' {
     if ($r.StdOut -notmatch 'Heart of The Alien Redux') { throw 'missing banner' }
     if ($r.StdOut -notmatch '--skip-password') { throw 'missing skip-password option' }
     if ($r.StdOut -notmatch '--no-skip-password') { throw 'missing no-skip-password option' }
+    if ($r.StdOut -notmatch '--music-volume') { throw 'missing music-volume option' }
+    if ($r.StdOut -notmatch '--sfx-volume') { throw 'missing sfx-volume option' }
+    if ($r.StdOut -notmatch '--integer-scale') { throw 'missing integer-scale option' }
 }
 
 Check 'launcher --print-options' {
@@ -218,6 +221,25 @@ for ($factor = 1; $factor -le 4; $factor++) {
         if ($r.Exited) { throw "exited early (code $($r.ExitCode))" }
         Assert-NoPanic $r
     }
+}
+
+Check 'integer scaling' {
+    $r = Invoke-Game @('--iso', '--room', '1', '--integer-scale', '--fastest', '--no-sound') $IdleSeconds
+    if ($r.Exited) { throw "exited early (code $($r.ExitCode))" }
+    Assert-NoPanic $r
+}
+
+Check 'volume options' {
+    $r = Invoke-Game @('--iso', '--room', '1', '--music-volume', '50', '--sfx-volume', '50', '--fastest') $IdleSeconds
+    if ($r.Exited) { throw "exited early (code $($r.ExitCode))" }
+    Assert-NoPanic $r
+}
+
+Check '--debug logging in release' {
+    $r = Invoke-Game @('--iso', '--room', '1', '--debug', '--fastest') $IdleSeconds
+    if ($r.Exited) { throw "exited early (code $($r.ExitCode))" }
+    if ($r.StdOut -notmatch 'loading ROOMS1') { throw 'no debug log output' }
+    Assert-NoPanic $r
 }
 
 Check 'bilinear filter' {

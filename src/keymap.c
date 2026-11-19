@@ -53,6 +53,7 @@ static const keymap_entry_t keymap_entries[] =
 	{ KM_B,          "action b",   "x, s",        "action button B" },
 	{ KM_C,          "action c",   "c, d",        "action button C" },
 	{ KM_START,      "start",      "enter, kpenter", "start / select button (continue, password entry)" },
+	{ KM_MUTE,       "mute",       "m",           "toggle music and sound effects" },
 	{ KM_QUICKSAVE,  "quicksave",  "f5",          "save the game to 'quicksave'" },
 	{ KM_QUICKLOAD,  "quickload",  "f7",          "load the game from 'quicksave'" },
 	{ KM_SCREENSHOT, "screenshot", "f12",         "write 'hota-screenshot.png'" },
@@ -62,6 +63,7 @@ static const keymap_entry_t keymap_entries[] =
 	{ KM_UPSCALE,    "upscale",    "f2",          "cycle upscaling (classic renderer)" },
 	{ KM_SCALER,     "scaler",     "f3",          "toggle Scale2x/3x smoothing (classic renderer)" },
 	{ KM_FILTER,     "filter",     "f",           "toggle bilinear filtering / Omniscale (HD)" },
+	{ KM_INTEGER,    "integer",    "i",           "toggle pixel-perfect integer scaling" },
 	{ KM_QUIT,       "quit",       "escape",      "leave the game" }
 };
 

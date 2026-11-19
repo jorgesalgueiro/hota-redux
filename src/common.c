@@ -61,8 +61,10 @@ int extl(unsigned short w)
 
 void panic(const char *string)
 {
-	printf("panic: %s\n", string);
-	exit(-1);
+	/* make sure debug output written before the crash is not lost */
+	fflush(stdout);
+	fprintf(stderr, "panic: %s\n", string);
+	exit(EXIT_FAILURE);
 }
 
 void fputw(unsigned short s, FILE *fp)

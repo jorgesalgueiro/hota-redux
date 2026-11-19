@@ -26,6 +26,7 @@ typedef enum
 	KM_B,
 	KM_C,
 	KM_START,
+	KM_MUTE,
 	KM_QUICKSAVE,
 	KM_QUICKLOAD,
 	KM_SCREENSHOT,
@@ -35,6 +36,7 @@ typedef enum
 	KM_UPSCALE,
 	KM_SCALER,
 	KM_FILTER,
+	KM_INTEGER,
 	KM_QUIT,
 	KM_COUNT
 } keymap_action;

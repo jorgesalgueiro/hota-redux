@@ -38,6 +38,7 @@ void toggle_fullscreen();
 void toggle_upscale();
 void toggle_scaler();
 void toggle_filter();
+void toggle_integer_scale();
 
 int render_set_upscale(int factor);
 int render_get_upscale();

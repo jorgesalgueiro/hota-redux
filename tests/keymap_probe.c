@@ -48,6 +48,8 @@ int main(int argc, char **argv)
 		expect("space = speed", keymap_matches(KM_SPEED, SDLK_SPACE, 0), 1);
 		expect("q = reset", keymap_matches(KM_RESET, SDLK_Q, 0), 1);
 		expect("return = start", keymap_matches(KM_START, SDLK_RETURN, 0), 1);
+		expect("m = mute", keymap_matches(KM_MUTE, SDLK_M, 0), 1);
+		expect("i = integer scaling", keymap_matches(KM_INTEGER, SDLK_I, 0), 1);
 		expect("keypad enter = start",
 			keymap_matches(KM_START, SDLK_KP_ENTER, 0), 1);
 		expect("alt+return = fullscreen",

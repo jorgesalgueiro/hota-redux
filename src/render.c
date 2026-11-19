@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  */
+#include <stdio.h>
 #include <string.h>
 #include <SDL3/SDL.h>
 
@@ -26,10 +27,15 @@
 #include "client.h"
 #include "upscale.h"
 #include "gl_render.h"
+#include "platform.h"
 
 static int fullscreen = 0;
 static int scroll_reg = 0;
 extern int fullscreen_flag;
+extern int integer_scale_flag;
+extern int test_flag;
+
+#define VIDEO_CONFIG_FILENAME "video.cfg"
 
 static SDL_Palette *palette;
 static SDL_Color palette_colors[16];
@@ -51,6 +57,80 @@ static int current_palette = 0;
 #define GAME_WIDTH  304
 #define GAME_HEIGHT 192
 #define MAX_UPSCALE 4
+
+/** Reads the remembered window size and integer-scaling flag. */
+static void load_video_config(int *width, int *height, int *integer_scale)
+{
+	FILE *fp;
+	char line[128];
+
+	*width = 0;
+	*height = 0;
+	*integer_scale = 0;
+
+	fp = hota_fopen(VIDEO_CONFIG_FILENAME, "r");
+	if (fp == NULL)
+	{
+		return;
+	}
+
+	while (fgets(line, sizeof(line), fp) != NULL)
+	{
+		int value;
+
+		if (sscanf(line, "width=%d", &value) == 1)
+		{
+			*width = value;
+		}
+		else if (sscanf(line, "height=%d", &value) == 1)
+		{
+			*height = value;
+		}
+		else if (sscanf(line, "integer=%d", &value) == 1)
+		{
+			*integer_scale = value ? 1 : 0;
+		}
+	}
+
+	fclose(fp);
+
+	if (*width < 304 || *height < 192 ||
+		*width > 16384 || *height > 16384)
+	{
+		*width = 0;
+		*height = 0;
+	}
+}
+
+/** Remembers the current windowed size and integer-scaling flag. */
+static void save_video_config()
+{
+	int width = 0;
+	int height = 0;
+	FILE *fp;
+
+	if (window == NULL || fullscreen || test_flag != 0)
+	{
+		return;
+	}
+
+	if (!SDL_GetWindowSize(window, &width, &height) ||
+		width < 304 || height < 192)
+	{
+		return;
+	}
+
+	fp = hota_fopen(VIDEO_CONFIG_FILENAME, "w");
+	if (fp == NULL)
+	{
+		return;
+	}
+
+	fprintf(fp, "width=%d\n", width);
+	fprintf(fp, "height=%d\n", height);
+	fprintf(fp, "integer=%d\n", cls.integer_scale ? 1 : 0);
+	fclose(fp);
+}
 
 /** Returns the current palette used
     @returns palette
@@ -148,6 +228,14 @@ int render_set_upscale(int factor)
 {
 	int width, height;
 
+	if (cls.integer_scale)
+	{
+		/* Integer presentation is based on the native 304x192 image,
+		 * so the internal upscaler would only shift the logical size
+		 * and make the integer factor smaller. */
+		factor = 1;
+	}
+
 	if (factor < 1) factor = 1;
 	if (factor > MAX_UPSCALE) factor = MAX_UPSCALE;
 
@@ -208,6 +296,7 @@ int render_set_upscale(int factor)
 	SDL_SetTexturePalette(texture, palette);
 	apply_scale_mode();
 	SDL_SetRenderLogicalPresentation(renderer, width, height,
+		cls.integer_scale ? SDL_LOGICAL_PRESENTATION_INTEGER_SCALE :
 		SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
 	LOG(("using %dx internal upscaling (%dx%d output texture)\n",
@@ -263,6 +352,22 @@ void toggle_scaler()
 	}
 
 	cls.smooth = !cls.smooth;
+}
+
+/** Toggles pixel-perfect integer scaling. */
+void toggle_integer_scale()
+{
+	cls.integer_scale = !cls.integer_scale;
+	LOG(("integer scaling: %s\n", cls.integer_scale ? "on" : "off"));
+
+	if (use_gl)
+	{
+		/* the shader picks this up on the next frame */
+		return;
+	}
+
+	render_set_upscale(cls.integer_scale ? 1 :
+		(cls.upscale > 0 ? cls.upscale : cls.scale));
 }
 
 /** Toggles smooth (bilinear) hardware filtering.
@@ -524,6 +629,13 @@ void set_palette(int which)
 
 void toggle_fullscreen()
 {
+	/* Remember the windowed size before it is replaced by the screen
+	 * dimensions. */
+	if (fullscreen == 0)
+	{
+		save_video_config();
+	}
+
 	fullscreen = 1 ^ fullscreen;
 
 	SDL_SetWindowFullscreen(window, fullscreen);
@@ -542,6 +654,8 @@ void toggle_fullscreen()
 int render_create_surface()
 {
 	int window_scale, upscale;
+	int window_width, window_height;
+	int cfg_width = 0, cfg_height = 0, cfg_integer = 0;
 
 	surface = SDL_CreateSurface(GAME_WIDTH, GAME_HEIGHT, SDL_PIXELFORMAT_INDEX8);
 	if (surface == NULL)
@@ -556,12 +670,54 @@ int render_create_surface()
 	}
 	SDL_SetSurfacePalette(surface, palette);
 
-	window_scale = cls.scale;
-	if (window_scale <= 0)
+	load_video_config(&cfg_width, &cfg_height, &cfg_integer);
+
+	if (integer_scale_flag >= 0)
+	{
+		cls.integer_scale = integer_scale_flag;
+	}
+	else
+	{
+		cls.integer_scale = cfg_integer;
+	}
+
+	if (cls.scale > 0)
+	{
+		window_scale = cls.scale;
+		window_width = GAME_WIDTH * window_scale;
+		window_height = GAME_HEIGHT * window_scale;
+	}
+	else if (cfg_width > 0 && cfg_height > 0)
+	{
+		SDL_Rect bounds;
+		SDL_DisplayID display = SDL_GetPrimaryDisplay();
+
+		window_width = cfg_width;
+		window_height = cfg_height;
+
+		/* Do not restore a window larger than the current display
+		 * (for example after moving to a smaller screen). */
+		if (display != 0 && SDL_GetDisplayUsableBounds(display, &bounds))
+		{
+			if (window_width > bounds.w) window_width = bounds.w;
+			if (window_height > bounds.h) window_height = bounds.h;
+			if (window_width < GAME_WIDTH) window_width = GAME_WIDTH;
+			if (window_height < GAME_HEIGHT) window_height = GAME_HEIGHT;
+		}
+
+		window_scale = window_width / GAME_WIDTH;
+		if (window_scale < 1) window_scale = 1;
+	}
+	else
 	{
 		window_scale = get_auto_scale();
+		window_width = GAME_WIDTH * window_scale;
+		window_height = GAME_HEIGHT * window_scale;
 	}
+
 	cls.scale = window_scale;
+	LOG(("window %dx%d (scale %d, integer %d)\n",
+		window_width, window_height, window_scale, cls.integer_scale));
 
 	if (cls.hd)
 	{
@@ -574,7 +730,7 @@ int render_create_surface()
 		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 0);
 
 		window = SDL_CreateWindow("Heart of The Alien Redux",
-			GAME_WIDTH * window_scale, GAME_HEIGHT * window_scale,
+			window_width, window_height,
 			SDL_WINDOW_RESIZABLE | SDL_WINDOW_OPENGL);
 
 		if (window != NULL)
@@ -613,8 +769,7 @@ int render_create_surface()
 	if (!use_gl)
 	{
 		window = SDL_CreateWindow("Heart of The Alien Redux",
-			GAME_WIDTH * window_scale, GAME_HEIGHT * window_scale,
-			SDL_WINDOW_RESIZABLE);
+			window_width, window_height, SDL_WINDOW_RESIZABLE);
 		if (window == NULL)
 		{
 			return -3;
@@ -661,6 +816,8 @@ int render_create_surface()
 */
 void render_done()
 {
+	save_video_config();
+
 	if (use_gl)
 	{
 		gl_render_done();

@@ -12,6 +12,7 @@ quicksave
 # runtime config and captures
 /keys.txt
 /play.cfg
+/video.cfg
 hota-screenshot.png
 
 # release artifact (attach the zip to a GitHub release instead)

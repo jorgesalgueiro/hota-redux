@@ -46,6 +46,18 @@ static unsigned char screen4[192*304];
 static void post_render(int fps)
 {
 	check_events();
+
+	while (cls.paused && cls.quit == 0)
+	{
+		SDL_Delay(16);
+		check_events();
+	}
+
+	if (cls.quit)
+	{
+		return;
+	}
+
 	update_keys();
 	rest(fps);
 }

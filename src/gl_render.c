@@ -14,6 +14,7 @@
 #include <SDL3/SDL_opengl.h>
 
 #include "gl_render.h"
+#include "client.h"
 #include "omniscale_shader.h"
 
 #ifndef HAVE_OPENGL
@@ -570,8 +571,25 @@ void gl_render_frame(const unsigned char *indices, int pitch,
 	scale_x = (float)win_w / (float)SRC_WIDTH;
 	scale_y = (float)win_h / (float)SRC_HEIGHT;
 	scale = (scale_x < scale_y) ? scale_x : scale_y;
-	view_w = (int)(SRC_WIDTH * scale + 0.5f);
-	view_h = (int)(SRC_HEIGHT * scale + 0.5f);
+
+	if (cls.integer_scale)
+	{
+		int integer_scale = (int)scale;
+
+		if (integer_scale < 1)
+		{
+			integer_scale = 1;
+		}
+
+		view_w = SRC_WIDTH * integer_scale;
+		view_h = SRC_HEIGHT * integer_scale;
+	}
+	else
+	{
+		view_w = (int)(SRC_WIDTH * scale + 0.5f);
+		view_h = (int)(SRC_HEIGHT * scale + 0.5f);
+	}
+
 	view_x = (win_w - view_w) / 2;
 	view_y = (win_h - view_h) / 2;
 

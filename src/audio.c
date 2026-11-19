@@ -34,7 +34,30 @@
 static MIX_Mixer *mixer;
 static MIX_Track *music;
 static MIX_Track *sounds[4];
+static float sound_base_gain[4];
 static int mixer_initialized = 0;
+
+/** Applies the configured music/SFX volumes and mute state. */
+void audio_apply_volumes(void)
+{
+	float master = cls.muted ? 0.0f : 1.0f;
+	float music_gain = master * (float)cls.music_volume / 100.0f;
+	float sfx_gain = master * (float)cls.sfx_volume / 100.0f;
+	int i;
+
+	if (music != NULL)
+	{
+		MIX_SetTrackGain(music, music_gain);
+	}
+
+	for (i = 0; i < 4; i++)
+	{
+		if (sounds[i] != NULL)
+		{
+			MIX_SetTrackGain(sounds[i], sound_base_gain[i] * sfx_gain);
+		}
+	}
+}
 
 /** Stops all 4 channels
 */
@@ -167,8 +190,9 @@ void play_sample(int index, int volume, int channel)
 		return;
 	}
 
+	sound_base_gain[channel] = (float)volume / 255.0f;
 	MIX_SetTrackAudio(sounds[channel], a);
-	MIX_SetTrackGain(sounds[channel], volume/255.0f);
+	audio_apply_volumes();
 	MIX_PlayTrack(sounds[channel], 0);
 	MIX_DestroyAudio(a);
 }
@@ -215,6 +239,7 @@ int audio_init()
 		}
 	}
 
+	audio_apply_volumes();
 	return 0;
 }
 
@@ -369,6 +394,7 @@ void play_music_track(int track, int loop)
 
 		MIX_SetTrackAudio(music, a);
 		MIX_SetTrackLoops(music, loop ? -1 : 0);
+		audio_apply_volumes();
 		MIX_PlayTrack(music, 0);
 		MIX_DestroyAudio(a);
 	}
