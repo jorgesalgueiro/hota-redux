@@ -30,8 +30,10 @@
 #include "common.h"
 #include "client.h"
 
-extern void check_events();
-extern void rest(int fps);
+///////
+void check_events();
+void rest(int fps);
+
 extern void update_keys();
 
 /* used for 4->8 bit conversion */
@@ -50,14 +52,23 @@ static void post_render(int fps)
 
 static void copy_to_screen(int a4)
 {
+	/* screen0 is offset by one row inside screenX, which gives room for
+	 * small negative scroll offsets. Refuse anything that would read
+	 * outside the animation framebuffers (corrupt animation data). */
+	if (a4 < -304 || a4 > (int)(sizeof(screenX) - 304 - 192*304))
+	{
+		LOG(("copy_to_screen: offset %d out of range\n", a4));
+		return;
+	}
+
 	render(screen0 + a4);
 }
 
-static void draw_pixel(char *out, int offset, int color)
+static void draw_pixel(unsigned char *out, int offset, int color)
 {
-	if (offset >= 304*192)
+	if (offset < 0 || offset >= 304*192)
 	{
-		LOG_ANIM("out of screen %d\n", offset);
+		LOG(("out of screen %d\n", offset));
 		return;
 	}
 
@@ -76,7 +87,7 @@ static void fillline(unsigned char *screen, int offset, int count, int color)
 static void unpack_animation_delta(int offset, unsigned char *out)
 {
 	int a5;
-	char *src;
+	unsigned char *src;
 	int d0, d2, d3, d5, d6, d7, d1;
 
 	a5 = offset;
@@ -125,7 +136,7 @@ static void unpack_animation_delta(int offset, unsigned char *out)
 	}
 
 	loc_d062:
-	if (d0 & (1 << d1))
+	if (d0 & (1u << d1))
 	{
 		goto loc_d04c;
 	}
@@ -153,7 +164,7 @@ static void unpack_animation_delta(int offset, unsigned char *out)
 	d5 = 1;
 
 	loc_d082:
-	if (d0 & (1 << d1))
+	if (d0 & (1u << d1))
 	{
 		goto loc_d0a8;
 	}
@@ -165,7 +176,7 @@ static void unpack_animation_delta(int offset, unsigned char *out)
 	}
 
 	loc_d08a:
-	if ((d0 & (1 << d1)) == 0)
+	if ((d0 & (1u << d1)) == 0)
 	{
 		goto loc_d090;
 	}
@@ -307,7 +318,7 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 				count = (count >> 4) + 2;
 				d4++;
 	
-				LOG_ANIM("block offset=%d w=%d h=%d color=%d\n", offset, count, d4, color);
+				LOG(("block offset=%d w=%d h=%d color=%d\n", offset, count, d4, color));
 	
 				do
 				{
@@ -332,7 +343,7 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 				offset = (offset << 8) | get_byte(a1++);
 				count = get_byte(a1++) + 1;
 	
-				LOG_ANIM("horizontal line offset=%d count=%d\n", offset, count);
+				LOG(("horizontal line offset=%d count=%d\n", offset, count));
 				fillline(out, offset, count, color); 
 			}
 		}
@@ -351,7 +362,7 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 				offset = (offset << 8) | get_byte(a1++);
 				count = get_byte(a1++);
 	
-				LOG_ANIM("vertical line offset=%d count=%d\n", offset, count);
+				LOG(("vertical line offset=%d count=%d\n", offset, count));
 	
 				while (count >= 0)
 				{
@@ -519,6 +530,11 @@ void flip_screens(int d0, int d1)
 	}
 	else
 	{
+		if (d0*2 > 304)
+		{
+			d0 = 152;
+		}
+
 		for (y=0; y<192; y++)
 		{
 			memcpy(screen0 + y*304, screen4 + y*304 + d0*2, 304 - d0*2);
@@ -710,7 +726,7 @@ int play_sequence(int offset, int fps)
 	/* clr.b   ($C0401).l */
 	copy_to_screen(a4);
 	post_render(fps);
-	/* LOG_ANIM("d1d4\n"); */
+	/* LOG(("d1d4\n")); */
 	a4 += d0;
 	d1--;
 	if (d1 >= 0)
@@ -864,14 +880,14 @@ int play_animation(const char *filename, int fileoffset)
 	int stop;
 	unsigned char *ptr;
 
-	LOG_ANIM("playing animation %s\n", filename);
+	LOG(("playing animation %s\n", filename));
 
 	/* animations are loaded into a fixed place in 68000 memory */
 	read_offset = 0x809a - fileoffset;
 	ptr = get_memory_ptr(read_offset);
 	if (read_file(filename, ptr) < 0)
 	{
-		LOG_ANIM("play_animation: unable to read %s\n", filename);
+		LOG(("play_animation: unable to read %s\n", filename));
 		return -1;
 	}
 
@@ -916,6 +932,6 @@ int play_animation(const char *filename, int fileoffset)
 	/* just in case, clean variable 250 (key_a pressed) */
 	set_variable(250, 0);
 
-	LOG_ANIM("leaving animation player\n");
+	LOG(("leaving animation player\n"));
 	return stop;
 }

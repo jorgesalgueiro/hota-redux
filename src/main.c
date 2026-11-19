@@ -39,6 +39,7 @@
 #include "sprites.h"
 #include "game2bin.h"
 #include "animation.h"
+#include "keymap.h"
 
 static char *QUICKSAVE_FILENAME = "quicksave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
@@ -71,7 +72,7 @@ int next_script;
 int current_backdrop;
 int current_room;
 
-bool speed_throttle = false;
+int speed_throttle = 0;
 
 int debug_flag = 0;
 int test_flag = 0;
@@ -79,28 +80,25 @@ int record_flag = 0;
 int replay_flag = 0;
 int fullscreen_flag = 0;
 int fastest_flag = 0;
+int check_keys_flag = 0;
 
 short task_pc[64];
 short new_task_pc[64];
 short enabled_tasks[64];
 short new_enabled_tasks[64];
 
-enum {
-	KEY_UP = BIT(0),
-	KEY_DOWN = BIT(1),
-	KEY_LEFT = BIT(2),
-	KEY_RIGHT = BIT(3),
-	KEY_A = BIT(4),
-	KEY_B = BIT(5),
-	KEY_C = BIT(6),
-	KEY_START = BIT(7)
-};
+static int key_up, key_down, key_left, key_right, key_a, key_b, key_c, key_select;
+static int key_reset_record;
 
-static int key_state;
+static Uint64 last_tick = 0, last_tick_fp = 0;
 
-#define JOY_DEADZONE 11000
+/** Optional alternate key bindings file (--keys). */
+static const char *keymap_filename = "keys.txt";
 
-static unsigned int last_tick = 0, last_tick_fp = 0;
+/* 3 bytes header + 256 global variables + aux variables + task state +
+ * sprite state */
+#define QUICKSAVE_SIZE (3L + 256*2L + MAX_TASKS*32*2L + MAX_TASKS*4*2L + \
+	MAX_SPRITES*16L + 3L)
 
 #define RECORDED_KEYS_CACHE 4096
 static int cached_keys_offset = 0;
@@ -112,27 +110,34 @@ FILE *record_fp = 0;
 /** scratchpad used for unpacking code */
 static unsigned char scratchpad[29184];
 
+
 #ifdef ENABLE_DEBUG
 short old_var[256+64*32];
 #endif
 
 static int load_room(int index)
 {
-	char filename[16];
+	char filename[32];
 	unsigned char *ptr;
 
-	strcpy(filename, "ROOMS0.BIN");
-	filename[5] = (index + '0');
+	if (index < 1 || index > 8)
+	{
+		fprintf(stderr, "invalid room number %d (valid rooms are 1-8)\n", index);
+		return -1;
+	}
 
-	LOG_MAIN("loading %s\n", filename);
+	snprintf(filename, sizeof(filename), "ROOMS%d.BIN", index);
+
+	LOG(("loading %s\n", filename));
 	ptr = get_memory_ptr(0xf900);
 	if (read_file(filename, ptr) < 0)
 	{
 		panic("load_room failed");
+		return -1;
 	}
 
 	script_ptr = get_long(0xf900);
-	LOG_MAIN("script ptr %x\n", script_ptr);
+	LOG(("script ptr %x\n", script_ptr));
 
 	sound_flush_cache();
 
@@ -143,6 +148,7 @@ static int load_room(int index)
 */
 static void atexit_callback()
 {
+	render_done();
 	audio_done();
 	SDL_Quit();
 
@@ -158,22 +164,35 @@ static void atexit_callback()
 
 static int initialize()
 {
-	SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO|SDL_INIT_GAMEPAD);
+	if (!SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO))
+	{
+		fprintf(stderr, "failed to initialize SDL: %s\n", SDL_GetError());
+		return -1;
+	}
+
 	atexit(atexit_callback);
+
+	keymap_init(keymap_filename);
 
 	if (cls.nosound == 0)
 	{
-		audio_init();
+		if (audio_init() < 0)
+		{
+			fprintf(stderr, "audio disabled: %s\n", SDL_GetError());
+			cls.nosound = 1;
+		}
 	}
 
 	if (render_init() < 0)
 	{
 		panic("failed to initialize renderer module");
+		return -1;
 	}
 
 	if (game2bin_init() < 0)
 	{
 		panic("can't read GAME2.BIN file");
+		return -1;
 	}
 
 	screen_init();
@@ -181,12 +200,10 @@ static int initialize()
 	vm_reset();
 	set_variable(227, 1);
 
-	// reset keys
-	key_state = 0;
-
 	if (render_create_surface() < 0)
 	{
 		panic("failed to create video surface");
+		return -1;
 	}
 
 	return 0;
@@ -195,18 +212,29 @@ static int initialize()
 /** Loads a screen from room file
     @param room    suffix for room%d.bin file
     @param index   screen number
+    @returns zero on success, negative on error
 */
-void load_room_screen(int room, int index)
+int load_room_screen(int room, int index)
 {
 	int i;
 	unsigned char *pixels;
 
-	LOG_MAIN("loading room screen %d from room file %d\n", index - 1, room);
+	if (index <= 0)
+	{
+		LOG(("invalid screen index %d\n", index));
+		return -1;
+	}
 
-	unpack_room(scratchpad, index - 1);           
+	LOG(("loading room screen %d from room file %d\n", index - 1, room));
+
+	if (unpack_room(scratchpad, index - 1) < 0)
+	{
+		LOG(("failed to unpack room screen %d\n", index - 1));
+		return -1;
+	}
 
 	/* convert 4bpp -> 8bpp */
-	pixels = get_screen_ptr(0);
+	pixels = (unsigned char *)get_screen_ptr(0);
 	for (i=0; i<304*192/2; i++)
 	{
 		pixels[i*2+0] = scratchpad[i] >> 4;
@@ -214,6 +242,7 @@ void load_room_screen(int room, int index)
 	}
 
 	current_backdrop = index;
+	return 0;
 }
 
 /** Rewinds (clears) the recorded-keys cache
@@ -227,6 +256,12 @@ void rewind_recorded_keys()
 */
 void flush_recorded_keys()
 {
+	if (record_fp == NULL)
+	{
+		cached_keys_offset = 0;
+		return;
+	}
+
 	fwrite(cached_recorded_keys, 1, cached_keys_offset, record_fp);
 	cached_keys_offset = 0;
 }
@@ -238,15 +273,30 @@ void flush_recorded_keys()
 */
 void read_keys_from_record()
 {
-	int c = fgetc(record_fp);
+	int c;
 
-	if (c == EOF)
+	if (record_fp == NULL)
 	{
 		c = 0;
-		ERROR("record file ended!\n");
+	}
+	else
+	{
+		c = fgetc(record_fp);
+		if (c == EOF)
+		{
+			c = 0;
+			LOG(("ERROR: record file ended!\n"));
+		}
 	}
 
-	key_state = c;
+	key_up = (c >> 7) & 1;
+	key_down = (c >> 6) & 1;
+	key_left = (c >> 5) & 1;
+	key_right = (c >> 4) & 1;
+	key_a = (c >> 3) & 1;
+	key_b = (c >> 2) & 1;
+	key_c = (c >> 1) & 1;
+	key_select = (c >> 0) & 1;
 }
 
 /** Adds a single key to the record file
@@ -256,10 +306,22 @@ void read_keys_from_record()
 */
 void add_keys_to_record()
 {
-	cached_recorded_keys[cached_keys_offset++] = key_state;
-	if (cached_keys_offset == sizeof(cached_recorded_keys))
+	int c;
+
+	if (record_fp == NULL)
 	{
-		/* if the player never quicksaves or quickloads */
+		return;
+	}
+
+	c = (key_up << 7) | (key_down << 6);
+	c = c | (key_left << 5) | (key_right << 4);
+	c = c | (key_a << 3) | (key_b << 2);
+	c = c | (key_c << 1) | key_select;
+
+ 	cached_recorded_keys[cached_keys_offset++] = c;
+ 	if (cached_keys_offset == sizeof(cached_recorded_keys))
+	{
+ 		/* if the player never quicksaves or quickloads */
 		flush_recorded_keys();
 	}
 }
@@ -280,30 +342,30 @@ void update_keys()
 
 	flags = 0;
 
-	if (key_state & KEY_RIGHT)
+	if (key_right)
 	{
 		set_variable(252, 1);
 		flags |= 1;
 	}
-	else if (key_state & KEY_LEFT)
+	else if (key_left)
 	{
 		set_variable(252, -1);
 		flags |= 2;
 	}
-	else if (key_state & KEY_DOWN)
+	else if (key_down)
 	{
 		set_variable(251, 1);
 		set_variable(229, 1);
 		flags |= 4;
 	}
 
-	if (key_state & KEY_UP)
+	if (key_up)
 	{
 		set_variable(229, -1);
 		flags |= 8;
 	}
 
-	if (key_state & KEY_C)
+	if (key_c)
 	{
 		set_variable(251, -1);
 		flags |= 8;
@@ -316,18 +378,15 @@ void update_keys()
 	set_variable(250, 0);
 	set_variable(254, get_variable(253));
 
-	if (key_state & KEY_B)
+	if (key_b)
 	{
 		set_variable(254, (unsigned short)(get_variable(254) | 0x40));
 	}
-	else if (key_state & KEY_A)
+	else if (key_a)
 	{
 		set_variable(250, 1);
 		set_variable(254, (unsigned short)(get_variable(254) | 0x80));
 	}
-
-	// FIXME c1: this allows leaving game over screen
-	//if (key_state & KEY_START) set_variable(226, 1);
 }
 
 /** Loads a quicksave file
@@ -336,6 +395,7 @@ void quickload()
 {
 	int i, j;
 	int palette_used;
+	long file_size;
 	FILE *fp;
 
 	fp = fopen(QUICKSAVE_FILENAME, "rb");
@@ -345,12 +405,43 @@ void quickload()
 		return;
 	}
 
+	if (fseek(fp, 0, SEEK_END) != 0)
+	{
+		perror("failed to read 'quicksave' file\n");
+		fclose(fp);
+		return;
+	}
+
+	file_size = ftell(fp);
+	if (fseek(fp, 0, SEEK_SET) != 0 || file_size != QUICKSAVE_SIZE)
+	{
+		fprintf(stderr, "invalid 'quicksave' file (size %ld, expected %ld)\n",
+			file_size, (long)QUICKSAVE_SIZE);
+		fclose(fp);
+		return;
+	}
+
 	current_room = fgetc(fp);
 	current_backdrop = fgetc(fp);
 	palette_used = fgetc(fp);
 
-	load_room(current_room);
-	load_room_screen(0, current_backdrop);
+	if (current_room < 1 || current_room > 8 || current_backdrop < 1)
+	{
+		fprintf(stderr, "invalid 'quicksave' file (room %d, backdrop %d)\n",
+			current_room, current_backdrop);
+		fclose(fp);
+		return;
+	}
+
+	if (load_room(current_room) < 0 ||
+		load_room_screen(0, current_backdrop) < 0)
+	{
+		fprintf(stderr, "failed to load room %d from 'quicksave' file\n",
+			current_room);
+		fclose(fp);
+		return;
+	}
+
 	set_palette(palette_used);
 
 	/* must be ran out of thread loop, so no active thread */
@@ -435,6 +526,12 @@ void quicksave()
 	}
 
 	quicksave_sprites(fp);
+
+	if (ferror(fp))
+	{
+		perror("failed to write 'quicksave' file\n");
+	}
+
 	fclose(fp);
 }
 
@@ -447,282 +544,192 @@ void check_events()
 {
 	SDL_Event event;
 
-	#define SET_KEY(x, b) \
-		(key_state = (b) ? key_state | (x) : key_state & ~(x))
-
 	while (SDL_PollEvent(&event))
 	{
-		if(event.type == SDL_EVENT_QUIT) {
-			cls.quit = true;
-		}
-		else if (event.type == SDL_EVENT_GAMEPAD_ADDED)
+	        switch (event.type) 
 		{
-			const SDL_JoystickID which = event.gdevice.which;
-			SDL_Gamepad *gamepad = SDL_OpenGamepad(which);
-			if (gamepad && cls.joy_index == -1)
+			case SDL_EVENT_KEY_UP:
+			if (keymap_matches(KM_RIGHT, event.key.key, event.key.mod))
 			{
-				LOG_MAIN("Opened GamePad %d\n", which);
-				cls.joy_index = which;
+				key_right = 0;
 			}
-		}
-		else if (event.type == SDL_EVENT_GAMEPAD_REMOVED)
-		{
-			const SDL_JoystickID which = event.gdevice.which;
-			SDL_Gamepad *gamepad = SDL_GetGamepadFromID(which);
-			if (gamepad)
+			if (keymap_matches(KM_LEFT, event.key.key, event.key.mod))
 			{
-				SDL_CloseGamepad(gamepad);
-				LOG_MAIN("Closed GamePad %d\n", which);
-				if (cls.joy_index == which)
-				{
-					cls.joy_index = -1;
-				}
+				key_left = 0;
 			}
-		}
-		else if (event.type == SDL_EVENT_GAMEPAD_AXIS_MOTION)
-		{
-			const SDL_JoystickID which = event.gaxis.which;
-			if (cls.joy_index == which)
+			if (keymap_matches(KM_UP, event.key.key, event.key.mod))
 			{
-				if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)
-				{
-					SET_KEY(KEY_LEFT, event.gaxis.value < -JOY_DEADZONE);
-					SET_KEY(KEY_RIGHT, event.gaxis.value > JOY_DEADZONE);
-				}
-				else if (event.gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY)
-				{
-					SET_KEY(KEY_UP, event.gaxis.value < -JOY_DEADZONE);
-					SET_KEY(KEY_DOWN, event.gaxis.value > JOY_DEADZONE);
-				}
+				key_up = 0;
 			}
-		}
-		else if ((event.type == SDL_EVENT_GAMEPAD_BUTTON_UP) || (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN))
-		{
-			const SDL_JoystickID which = event.gbutton.which;
-			if (cls.joy_index == which)
+			if (keymap_matches(KM_DOWN, event.key.key, event.key.mod))
 			{
-				switch(event.gbutton.button)
+				key_down = 0;
+			}
+			if (keymap_matches(KM_A, event.key.key, event.key.mod))
+			{
+				key_a = 0;
+			}
+			if (keymap_matches(KM_B, event.key.key, event.key.mod))
+			{
+				key_b = 0;
+			}
+			if (keymap_matches(KM_C, event.key.key, event.key.mod))
+			{
+				key_c = 0;
+			}
+			if (keymap_matches(KM_RESET, event.key.key, event.key.mod))
+			{
+				key_a = 0;
+				key_reset_record = 0;
+			}
+			if (keymap_matches(KM_SPEED, event.key.key, event.key.mod))
+			{
+				speed_throttle = 0;
+			}
+			break;
+
+		case SDL_EVENT_KEY_DOWN:
+			/* Ignore auto-repeat: movement keys keep their state, and
+			 * action keys (save/load/screenshot/...) must trigger once. */
+			if (event.key.repeat)
+			{
+				break;
+			}
+
+			#ifdef ENABLE_DEBUG
+			/* enable/disable sprites */
+			switch (event.key.key)
+			{
+				case SDLK_1:
+				case SDLK_2:
+				case SDLK_3:
+				case SDLK_4:
+				case SDLK_5:
+				case SDLK_6:
+				case SDLK_7:
+				case SDLK_8:
+				case SDLK_9:
 				{
-					case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:
-					SET_KEY(KEY_RIGHT, event.gbutton.down);
-					break;
+					int tmp = event.key.key - SDLK_1 + 1;
 
-					case SDL_GAMEPAD_BUTTON_DPAD_LEFT:
-					SET_KEY(KEY_LEFT, event.gbutton.down);
-					break;
-
-					case SDL_GAMEPAD_BUTTON_DPAD_UP:
-					SET_KEY(KEY_UP, event.gbutton.down);
-					break;
-
-					case SDL_GAMEPAD_BUTTON_DPAD_DOWN:
-					SET_KEY(KEY_DOWN, event.gbutton.down);
-					break;
-
-					case SDL_GAMEPAD_BUTTON_WEST:
-					SET_KEY(KEY_A, event.gbutton.down);
-					break;
-
-					case SDL_GAMEPAD_BUTTON_SOUTH:
-					SET_KEY(KEY_B, event.gbutton.down);
-					break;
-
-					case SDL_GAMEPAD_BUTTON_EAST:
-					SET_KEY(KEY_C, event.gbutton.down);
-					break;
-
-					case SDL_GAMEPAD_BUTTON_NORTH:
-					SET_KEY(KEY_START, event.gbutton.down);
-					break;
-
-					case SDL_GAMEPAD_BUTTON_GUIDE:
-					speed_throttle = event.gbutton.down;
-					break;
-
-					default:
-					/* keep -Wall happy */
-					break;
-				}
-
-				if (event.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN)
-				{
-					switch(event.gbutton.button)
+					if (event.key.mod & SDL_KMOD_SHIFT)
 					{
-						case SDL_GAMEPAD_BUTTON_BACK:
-						cls.quit = true;
-						break;
-
-						case SDL_GAMEPAD_BUTTON_START:
-						toggle_filter();
-						break;
-
-						case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:
-						quicksave();
-						break;
-
-						case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER:
-						quickload();
-						break;
-
-						default:
-						/* keep -Wall happy */
-						break;
+						tmp = tmp + 10;
 					}
+
+					sprites[tmp].u1 ^= 0x80;
 				}
-			}
-		}
-		else if ((event.type == SDL_EVENT_KEY_UP) || (event.type == SDL_EVENT_KEY_DOWN))
-		{
-			switch(event.key.key)
-			{
-				case SDLK_RIGHT:
-				SET_KEY(KEY_RIGHT, event.key.down);
 				break;
 
-				case SDLK_LEFT:
-				SET_KEY(KEY_LEFT, event.key.down);
-				break;
-
-				case SDLK_UP:
-				SET_KEY(KEY_UP, event.key.down);
-				break;
-
-				case SDLK_DOWN:
-				SET_KEY(KEY_DOWN, event.key.down);
-				break;
-
-				case SDLK_Z:
-				case SDLK_A:
-				SET_KEY(KEY_A, event.key.down);
-				break;
-
-				case SDLK_X:
-				case SDLK_S:
-				SET_KEY(KEY_B, event.key.down);
-				break;
-
-				case SDLK_C:
-				case SDLK_D:
-				SET_KEY(KEY_C, event.key.down);
-				break;
-
-				case SDLK_LCTRL:
-				SET_KEY(KEY_START, event.key.down);
-				break;
-
-				case SDLK_SPACE:
-				speed_throttle = event.key.down;
+				case SDLK_G:
+				debug_flag ^= 1;
 				break;
 
 				default:
-				/* keep -Wall happy */
 				break;
 			}
+			#endif
 
-			if (event.type == SDL_EVENT_KEY_DOWN)
+			if (keymap_matches(KM_RIGHT, event.key.key, event.key.mod))
 			{
-				switch(event.key.key)
-				{
-					#ifdef ENABLE_DEBUG
-					/* enable/disable sprites */
-					case SDLK_1:
-					case SDLK_2:
-					case SDLK_3:
-					case SDLK_4:
-					case SDLK_5:
-					case SDLK_6:
-					case SDLK_7:
-					case SDLK_8:
-					case SDLK_9:
-					{
-						int tmp = event.key.key - SDLK_1 + 1;
-
-						if (event.key.mod & SDL_KMOD_SHIFT)
-						{
-							tmp = tmp + 10;
-						}
-
-						sprites[tmp].u1 ^= 0x80;
-					}
-					break;
-
-					/* enable/disable debug messages */
-					case SDLK_KP_1:
-					case SDLK_KP_2:
-					case SDLK_KP_3:
-					case SDLK_KP_4:
-					case SDLK_KP_5:
-					case SDLK_KP_6:
-					case SDLK_KP_7:
-					case SDLK_KP_8:
-					//case SDLK_KP_9:
-					{
-						int tmp = event.key.key - SDLK_KP_1 + 1;
-						debug_flag ^= BIT(tmp);
-					}
-					break;
-					#endif
-
-					case SDLK_ESCAPE:
-					cls.quit = true;
-					break;
-
-					case SDLK_F:
-					toggle_filter();
-					break;
-
-					case SDLK_F5:
-					quicksave();
-					break;
-
-					case SDLK_F7:
-					quickload();
-					break;
-
-					case SDLK_F12:
-					screenshot();
-					break;
-
-					case SDLK_RETURN:
-					if (event.key.mod & SDL_KMOD_ALT)
-					{
-						toggle_fullscreen();
-					}
-					break;
-
-					default:
-					/* keep -Wall happy */
-					break;
-				}
+				key_right = 1;
 			}
+			if (keymap_matches(KM_LEFT, event.key.key, event.key.mod))
+			{
+				key_left = 1;
+			}
+			if (keymap_matches(KM_UP, event.key.key, event.key.mod))
+			{
+				key_up = 1;
+			}
+			if (keymap_matches(KM_DOWN, event.key.key, event.key.mod))
+			{
+				key_down = 1;
+			}
+			if (keymap_matches(KM_A, event.key.key, event.key.mod))
+			{
+				key_a = 1;
+			}
+			if (keymap_matches(KM_B, event.key.key, event.key.mod))
+			{
+				key_b = 1;
+			}
+			if (keymap_matches(KM_C, event.key.key, event.key.mod))
+			{
+				key_c = 1;
+			}
+			if (keymap_matches(KM_QUICKSAVE, event.key.key, event.key.mod))
+			{
+				quicksave();
+			}
+			if (keymap_matches(KM_QUICKLOAD, event.key.key, event.key.mod))
+			{
+				quickload();
+			}
+			if (keymap_matches(KM_SCREENSHOT, event.key.key, event.key.mod))
+			{
+				screenshot();
+			}
+			if (keymap_matches(KM_FULLSCREEN, event.key.key, event.key.mod))
+			{
+				toggle_fullscreen();
+			}
+			if (keymap_matches(KM_SPEED, event.key.key, event.key.mod))
+			{
+				speed_throttle = 1;
+			}
+			if (keymap_matches(KM_RESET, event.key.key, event.key.mod))
+			{
+				key_a = 1;
+				key_reset_record = 1;
+			}
+			if (keymap_matches(KM_UPSCALE, event.key.key, event.key.mod))
+			{
+				toggle_upscale();
+			}
+			if (keymap_matches(KM_SCALER, event.key.key, event.key.mod))
+			{
+				toggle_scaler();
+			}
+			if (keymap_matches(KM_FILTER, event.key.key, event.key.mod))
+			{
+				toggle_filter();
+			}
+			if (keymap_matches(KM_QUIT, event.key.key, event.key.mod))
+			{
+				cls.quit = 1;
+			}
+			break;
+
+		case SDL_EVENT_QUIT:
+			cls.quit = 1;
+			break;
 		}
 	}
-
-	#undef SET_KEY
 }
 
 void rest(int fps)
 {
 	if (fastest_flag == 0)
 	{
-		// only set reference
-		if (fps == 0)
+		/* only set reference */
+		if (fps <= 0)
 		{
 			last_tick = SDL_GetTicks();
 			last_tick_fp = 0;
 			return;
 		}
 
-		if (speed_throttle)
+		if (speed_throttle == 1)
 		{
 			/* 10 times faster */
 			fps = fps*10;
 		}
 
-		unsigned int diff = ((1000 << 16) / fps) + last_tick_fp;
+		Uint64 diff = ((1000ULL << 16) / (Uint64)fps) + last_tick_fp;
 		last_tick_fp = diff & 0xffff;
 		diff = diff >> 16;
-		unsigned int current_tick = SDL_GetTicks();
+		Uint64 current_tick = SDL_GetTicks();
 		while (current_tick - last_tick < diff)
 		{
 			SDL_Delay(1);
@@ -768,7 +775,7 @@ int play_anm(anm_file_t *anm, int n, int skippable)
 	ret = 0;
 	for (seq = 0; seq < n; seq++)
 	{
-		if (!cls.quit)
+		if (cls.quit == 0)
 		{
 			int ok;
 
@@ -809,10 +816,10 @@ static void play_intro()
 */
 static void run()
 {
-	cls.quit = false;
+	cls.quit = 0;
 	init_tasks();
 
-	if (!next_script)
+	if (next_script == 0)
 	{
 		/* if no room specified, then follow the original flow:
 		 * first play intro, then jump to code entry script.
@@ -823,16 +830,16 @@ static void run()
 
 	rest(0);
 
-	while (!cls.quit)
+	while (cls.quit == 0)
 	{
 		int i;
 
-		if (next_script)
+		if (next_script != 0)
 		{
 			current_room = next_script;
 			reset_sprite_list();
 			init_tasks();
-			LOG_MAIN("loading room %d\n", current_room);
+			LOG(("loading room %d\n", current_room));
 			load_room(current_room);
 			next_script = 0;
 		}
@@ -851,19 +858,22 @@ static void run()
 			add_keys_to_record();
 		}
 	
-		LOG_MAIN("*new frame*\n");
+		LOG(("*new frame*\n"));
 
 		for (i=0; i<MAX_TASKS; i++)
 		{
+			int d0;
+
 			/* 70d0 */
 			enabled_tasks[i] = new_enabled_tasks[i];
 
-			int d0 = new_task_pc[i];
+			d0 = new_task_pc[i];
 			if (d0 == -1)
 			{
 				continue;
 			}
-			else if (d0 == -2)
+			
+			if (d0 == -2)
 			{
 				d0 = -1;
 			}		
@@ -879,9 +889,9 @@ static void run()
 			{
 				toggle_aux(0);
 				set_aux_bank(i);
-				LOG_TASK("task %d starts at 0x%x\n", i, pc);
+				LOG(("task %d starts at 0x%x\n", i, pc));
 				task_pc[i] = decode(i, pc);
-				LOG_TASK("task %d ended at 0x%x\n", i, pc);
+				LOG(("task %d ended at 0x%x\n", i, pc));
 			}
 
 			if (next_script != 0)
@@ -921,13 +931,13 @@ void sprite_test()
 	sprites[0].x = 10;
 	sprites[0].y = 10;
 
-	cls.quit = false;
+	cls.quit = 0;
 
 	redraw = 1;
 	set_palette(0x11);
 	rest(0);
 
-	while (!cls.quit)
+	while (cls.quit == 0)
 	{
 		int a4;
 
@@ -954,7 +964,7 @@ void sprite_test()
 
 		update_keys();
 
-		if (get_variable(252) == 1) // right
+		if (get_variable(252) == 1)
 		{
 			int i = (sprites[0].frame & 0x7f) + 1;
 			sprites[0].frame = (sprites[0].frame & 0x80) | i;
@@ -966,7 +976,7 @@ void sprite_test()
 			redraw = 1;
 		}
 
-		if (get_variable(252) == -1) // left
+		if (get_variable(252) == -1)
 		{
 			if (sprites[0].frame > 0)
 			{
@@ -976,14 +986,17 @@ void sprite_test()
 			}
 		}
 
-		if (get_variable(229) == 1) // down
+		if (get_variable(229) == 1)
 		{
 			redraw = 1;
-			sprites[0].index++;
+			if (sprites[0].index < 255)
+			{
+				sprites[0].index++;
+			}
 			sprites[0].frame &= 0x80;
 		}
 
-		if (get_variable(229) == -1) // up
+		if (get_variable(229) == -1)
 		{
 			if (sprites[0].index > 0)
 			{
@@ -993,13 +1006,12 @@ void sprite_test()
 			}
 		}
 
-		if (get_variable(250)) // a
+		if (get_variable(250))
 		{
 			/* flip */
 			sprites[0].frame ^= 0x80;
 		}
 
-		// reset direction
 		set_variable(229, 0);
 		set_variable(252, 0);
 	}
@@ -1012,13 +1024,20 @@ static void help()
 	#ifdef ENABLE_DEBUG
 	puts("\t--debug        turn on debugging");
 	#endif
-	puts("\t--scale x      rescale by factor <x>");
-	puts("\t--filter       use bilinear filter");
+	puts("\t--scale x      window scale factor <x> (0 = auto)");
+	puts("\t--upscale n    internal upscaling 1-4 (0 = auto)");
+	puts("\t--smooth       use Scale2x/3x smoothing (default: sharp)");
+	puts("\t--filter       use bilinear filtering");
+	puts("\t--hd           HD rendering via OpenGL (default)");
+	puts("\t--no-hd        disable HD, use the SDL renderer");
+	puts("\t--sharp        HD: nearest shader instead of Omniscale");
+	puts("\t--hd-smooth n  HD: Omniscale diagonal smoothing 0-100 (default: 30)");
 	puts("\t--fullscreen   start in fullscreen");
 	puts("\t--room n       start from room <n>");
 	puts("\t--iso prefix   use ISO image <prefix.iso>");
 	puts("\t--music prefix use music <prefix.[wav/mp3/ogg/opus/flac]>");
-	puts("\t--joystick n   use joytick <n> instead of autodetect");
+	puts("\t--keys file    read key bindings from <file> (default: keys.txt)");
+	puts("\t--check-keys   validate the key bindings file and exit");
 	puts("\t--sprite-test  run sprite test (use with room)");
 	puts("\t--intro-test   play all animations");
 	puts("\t--fastest      speed throttle");
@@ -1033,6 +1052,8 @@ static struct parg_option options[] =
 	{"room", PARG_REQARG, NULL, 'r'},
 	{"iso", PARG_OPTARG, NULL, 'i'},
 	{"music", PARG_REQARG, NULL, 'm'},
+	{"keys", PARG_REQARG, NULL, 'k'},
+	{"check-keys", PARG_NOARG, &check_keys_flag, 1},
 	{"sprite-test", PARG_NOARG, &test_flag, 1},
 	{"intro-test", PARG_NOARG, &test_flag, 2},
 	{"help", PARG_NOARG, NULL, 'h'},
@@ -1041,8 +1062,13 @@ static struct parg_option options[] =
 	{"record", PARG_NOARG, &record_flag, 1},
 	{"replay", PARG_NOARG, &replay_flag, 1},
 	{"scale", PARG_REQARG, NULL, 's'},
-	{"joystick", PARG_REQARG, NULL, 'j'},
+	{"upscale", PARG_REQARG, NULL, 'u'},
+	{"smooth", PARG_NOARG, &cls.smooth, 1},
 	{"filter", PARG_NOARG, NULL, 'f'},
+	{"hd", PARG_NOARG, &cls.hd, 1},
+	{"no-hd", PARG_NOARG, &cls.hd, 0},
+	{"sharp", PARG_NOARG, &cls.hd_sharp, 1},
+	{"hd-smooth", PARG_REQARG, NULL, 'S'},
 	{"fastest", PARG_NOARG, &fastest_flag, 1},
 	{0, 0, 0, 0}
 };
@@ -1052,17 +1078,17 @@ int main(int argc, char **argv)
 	next_script = 0;
 
 	// set default options
-	cls.paused = false;
-	cls.speed_throttle = false;
-
-	cls.scale = 2;
+	cls.scale = 0;
+	cls.upscale = 0;
+	cls.smooth = 0;
 	cls.filtered = 0;
+	cls.hd = 1;
+	cls.hd_sharp = 0;
+	cls.hd_smooth = 30;
 	cls.fullscreen = 0;
-
+	cls.speed_throttle = 0;
+	cls.paused = 0;
 	cls.nosound = 0;
-
-	cls.joy_index = -1;
-
 	cls.use_iso = false;
 	cls.iso_prefix = NULL;
 	cls.music_prefix = NULL;
@@ -1071,7 +1097,7 @@ int main(int argc, char **argv)
 	struct parg_state ps;
 	parg_init(&ps);
 	int c;
-	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:", options, NULL)) != -1)
+	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:k:S:", options, NULL)) != -1)
 	{
 		switch(c)
 		{
@@ -1083,11 +1109,24 @@ int main(int argc, char **argv)
 			help();
 			return 0;
 
+			case 'd':
+			debug_flag = 1;
+			break;
+
 			case 's':
 			cls.scale = atoi(ps.optarg);
-			if (cls.scale < 2)
+			if (cls.scale < 0 || cls.scale > 16)
 			{
-				panic("invalid scale factor");
+				fprintf(stderr, "invalid scale factor %d (valid: 0-16, 0 = auto)\n", cls.scale);
+				return 1;
+			}
+			break;
+
+			case 'u':
+			cls.upscale = atoi(ps.optarg);
+			if (cls.upscale < 0 || cls.upscale > 4)
+			{
+				fprintf(stderr, "invalid upscale factor %d (valid: 0-4, 0 = auto)\n", cls.upscale);
 				return 1;
 			}
 			break;
@@ -1096,12 +1135,17 @@ int main(int argc, char **argv)
 			cls.filtered = 1;
 			break;
 
-			case 'n':
-			cls.nosound = 1;
+			case 'S':
+			cls.hd_smooth = atoi(ps.optarg);
+			if (cls.hd_smooth < 0 || cls.hd_smooth > 100)
+			{
+				fprintf(stderr, "invalid HD smoothing %d (valid: 0-100)\n", cls.hd_smooth);
+				return 1;
+			}
 			break;
 
-			case 'j':
-			cls.joy_index = atoi(ps.optarg);
+			case 'n':
+			cls.nosound = 1;
 			break;
 
 			case 'i':
@@ -1121,6 +1165,10 @@ int main(int argc, char **argv)
 			cls.music_prefix = strdup(ps.optarg);
 			break;
 
+			case 'k':
+			keymap_filename = ps.optarg;
+			break;
+
 			case '?':
 			panic("invalid argument");
 			return 1;
@@ -1133,16 +1181,59 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	if (next_script < 0 || next_script > 8)
+	{
+		fprintf(stderr, "invalid room number %d (valid rooms are 1-8)\n", next_script);
+		return 1;
+	}
+
 	if (replay_flag)
 	{
 		record_fp = fopen(RECORDED_KEYS_FILENAME, "rb");
+		if (record_fp == NULL)
+		{
+			perror("failed to open 'recorded-keys' file for replay");
+			return 1;
+		}
 	}
 	else if (record_flag)
 	{
 		record_fp = fopen(RECORDED_KEYS_FILENAME, "wb");
+		if (record_fp == NULL)
+		{
+			perror("failed to create 'recorded-keys' file");
+			return 1;
+		}
 	}
 
-	initialize();
+	if (check_keys_flag)
+	{
+		/* validate the bindings file without starting the game */
+		int inited = SDL_Init(0);
+
+		keymap_init(keymap_filename);
+		if (inited)
+		{
+			SDL_Quit();
+		}
+		return 0;
+	}
+
+	if (initialize() < 0)
+	{
+		if (record_fp != NULL)
+		{
+			fclose(record_fp);
+			record_fp = NULL;
+		}
+		return 1;
+	}
+
+	if (test_flag == 1 && next_script == 0)
+	{
+		/* sprite test needs a room; use the first one by default */
+		next_script = 1;
+	}
 
 	switch(test_flag)
 	{

@@ -44,23 +44,29 @@ sprite_t sprites[64];
 */
 void print_sprite(int p)
 {
-	LOG_SPRITE("sprite %d\n", p);
-	LOG_SPRITE("\tindex: %d\n", sprites[p].index);
-	LOG_SPRITE("\tu1: %d\n", sprites[p].u1);
-	LOG_SPRITE("\tnext: %d\n", sprites[p].next);
-	LOG_SPRITE("\tframe: %d\n", sprites[p].frame);
-	LOG_SPRITE("\tx: %d\n", sprites[p].x);
-	LOG_SPRITE("\ty: %d\n", sprites[p].y);
-	LOG_SPRITE("\tu2: %d\n", sprites[p].u2);
-	LOG_SPRITE("\tu3: %d\n", sprites[p].u3);
-	LOG_SPRITE("\tw4: %d\n", sprites[p].w4);
-	LOG_SPRITE("\tw5: %d\n", sprites[p].w5);
-	LOG_SPRITE("\tu6: %d\n", sprites[p].u6);
-	LOG_SPRITE("\tu7: %d\n", sprites[p].u7);
+	LOG(("sprite %d\n", p));
+	LOG(("\tindex: %d\n", sprites[p].index));
+	LOG(("\tu1: %d\n", sprites[p].u1));
+	LOG(("\tnext: %d\n", sprites[p].next));
+	LOG(("\tframe: %d\n", sprites[p].frame));
+	LOG(("\tx: %d\n", sprites[p].x));
+	LOG(("\ty: %d\n", sprites[p].y));
+	LOG(("\tu2: %d\n", sprites[p].u2));
+	LOG(("\tu3: %d\n", sprites[p].u3));
+	LOG(("\tw4: %d\n", sprites[p].w4));
+	LOG(("\tw5: %d\n", sprites[p].w5));
+	LOG(("\tu6: %d\n", sprites[p].u6));
+	LOG(("\tu7: %d\n", sprites[p].u7));
 }
 
 short get_sprite_data_word(int entry, int i)
 {
+	if (entry < 0 || entry >= MAX_SPRITES)
+	{
+		LOG(("get_sprite_data_word: invalid sprite %d\n", entry));
+		return 0;
+	}
+
 	assert(i >= 0 && i <= 15);
 
 	switch(i)
@@ -78,7 +84,7 @@ short get_sprite_data_word(int entry, int i)
 		return sprites[entry].w5;
 
 		default:
-		LOG_SPRITE("get_sprite_data_word on %d\n", i);
+		LOG(("get_sprite_data_word on %d\n", i));
 		assert(0);
 		return 0;
 	}
@@ -91,9 +97,15 @@ short get_sprite_data_word(int entry, int i)
 */
 void set_sprite_data_word(int entry, int i, short value)
 {
+	if (entry < 0 || entry >= MAX_SPRITES)
+	{
+		LOG(("set_sprite_data_word: invalid sprite %d\n", entry));
+		return;
+	}
+
 	assert(i >= 0 && i <= 15);
 
-	LOG_SPRITE("set_sprite_data_word(entry=%d, i=%d, value=%d)\n", entry, i, value);
+	LOG(("set_sprite_data_word(entry=%d, i=%d, value=%d)\n", entry, i, value));
 
 	switch(i)
 	{
@@ -114,7 +126,7 @@ void set_sprite_data_word(int entry, int i, short value)
 		break;
 
 		default:
-		LOG_SPRITE("set_sprite_data_word on %d value %d\n", i, value);
+		LOG(("set_sprite_data_word on %d value %d\n", i, value));
 		assert(0);
 	}
 }
@@ -126,6 +138,12 @@ void set_sprite_data_word(int entry, int i, short value)
 */
 unsigned char get_sprite_data_byte(int entry, int i)
 {
+	if (entry < 0 || entry >= MAX_SPRITES)
+	{
+		LOG(("get_sprite_data_byte: invalid sprite %d\n", entry));
+		return 0;
+	}
+
 	assert(i >= 0 && i <= 15);
 
 	switch(i)
@@ -149,7 +167,7 @@ unsigned char get_sprite_data_byte(int entry, int i)
 		return sprites[entry].u7;
 
 		default:
-		LOG_SPRITE("get_sprite_data_byte on %d\n", i);
+		LOG(("get_sprite_data_byte on %d\n", i));
 		assert(0);
 		return 0;
 	}
@@ -157,9 +175,15 @@ unsigned char get_sprite_data_byte(int entry, int i)
 
 void set_sprite_data_byte(int entry, int i, unsigned char value)
 {
+	if (entry < 0 || entry >= MAX_SPRITES)
+	{
+		LOG(("set_sprite_data_byte: invalid sprite %d\n", entry));
+		return;
+	}
+
 	assert(i >= 0 && i <= 15);
 
-	LOG_SPRITE("set_sprite_data_byte(entry=%d, i=%d, value=%d)\n", entry, i, value);
+	LOG(("set_sprite_data_byte(entry=%d, i=%d, value=%d)\n", entry, i, value));
 
 	switch(i)
 	{
@@ -188,7 +212,7 @@ void set_sprite_data_byte(int entry, int i, unsigned char value)
 		break;
 
 		default:
-		LOG_SPRITE("set_sprite_data_byte on %d to %d\n", i, value);
+		LOG(("set_sprite_data_byte on %d to %d\n", i, value));
 		assert(0);
 	}
 }
@@ -216,6 +240,12 @@ void reset_sprite_list()
 
 void move_sprite_by(int sprite, int dx, int dy)
 {
+	if (sprite < 0 || sprite >= MAX_SPRITES)
+	{
+		LOG(("move_sprite_by: invalid sprite %d\n", sprite));
+		return;
+	}
+
 	sprites[sprite].x += dx;
 	sprites[sprite].w4 += dx;
 	sprites[sprite].y += dy;
@@ -225,6 +255,12 @@ void move_sprite_by(int sprite, int dx, int dy)
 void flip_sprite(int sprite)
 {
 	int old;
+
+	if (sprite < 0 || sprite >= MAX_SPRITES)
+	{
+		LOG(("flip_sprite: invalid sprite %d\n", sprite));
+		return;
+	}
 
 	old = sprites[sprite].frame & 0x80;
 	sprites[sprite].frame ^= 0x80;
@@ -243,6 +279,11 @@ void flip_sprite(int sprite)
 */
 void mirror_sprite(int sprite)
 {
+	if (sprite < 0 || sprite >= MAX_SPRITES)
+	{
+		return;
+	}
+
 	if ((sprites[sprite].frame & 0x80) == 0)
 	{
 		flip_sprite(sprite);
@@ -254,6 +295,11 @@ void mirror_sprite(int sprite)
 */
 void unmirror_sprite(int sprite)
 {
+	if (sprite < 0 || sprite >= MAX_SPRITES)
+	{
+		return;
+	}
+
 	if ((sprites[sprite].frame & 0x80))
 	{
 		flip_sprite(sprite);
@@ -284,6 +330,12 @@ void remove_sprite(int var)
 
 	to_remove = get_variable(var);
 
+	if (to_remove < 1 || to_remove >= MAX_SPRITES)
+	{
+		LOG(("remove_sprite: invalid sprite %d\n", to_remove));
+		return;
+	}
+
 	if (to_remove == first_sprite)
 	{
 		/* remove first sprite */
@@ -295,14 +347,22 @@ void remove_sprite(int var)
 	}
 
 	entry = first_sprite;
+	if (entry < 0 || entry >= MAX_SPRITES)
+	{
+		return;
+	}
 
 	/* look for the sprite to be removed */
-	while (sprites[entry].next != to_remove)
 	{
-		entry = sprites[entry].next;
-		if (entry == 0)
+		int guard = 0;
+
+		while (sprites[entry].next != to_remove)
 		{
-			return;
+			entry = sprites[entry].next;
+			if (entry == 0 || entry >= MAX_SPRITES || ++guard > MAX_SPRITES)
+			{
+				return;
+			}
 		}
 	}
 
@@ -386,24 +446,55 @@ void render_sprite(int list_entry)
 	int d7;
 	int offset;
 	int color;
-	int a2, a3;
+	unsigned long a2, a3;
 	int count;
 	int sx, sy;
 	int x, y, dx, dy;
 
+	if (list_entry < 0 || list_entry >= MAX_SPRITES)
+	{
+		LOG(("render_sprite: invalid sprite %d\n", list_entry));
+		return;
+	}
+
 	/* d89e */
 	d2 = sprites[list_entry].index;
 
+	if (d2 >= VM_MEMORY_SIZE / 4)
+	{
+		return;
+	}
+
 	a3 = get_long(0xf904) + (d2 << 2);
+	if (a3 + 4 >= VM_MEMORY_SIZE)
+	{
+		return;
+	}
+
 	a3 = get_long(a3);
+	if (a3 == 0 || a3 >= VM_MEMORY_SIZE)
+	{
+		LOG(("render_sprite: invalid resource offset 0x%lx\n", a3));
+		return;
+	}
 
 	d1 = d2 = 0;
 	x = extl(sprites[list_entry].x);
 	y = extl(sprites[list_entry].y);
 
 	d2 = sprites[list_entry].frame & 0x7f;
+	if (a3 + d2*2 + 8 >= VM_MEMORY_SIZE)
+	{
+		return;
+	}
+
 	d1 = get_word(a3 + d2*2 + 6);
 	a2 = a3 + d1 + 4;
+	if (a2 + 2 >= VM_MEMORY_SIZE)
+	{
+		return;
+	}
+
 	d6 = get_word(a2);
 	a2 += 2;
 	
@@ -422,6 +513,11 @@ void render_sprite(int list_entry)
 	
 		/* d2 is color */
 		loc_d91e:
+		if (a2 + 3 >= VM_MEMORY_SIZE)
+		{
+			return;
+		}
+
 		offset = get_word(a2); /* relative offset */
 		a2 = a2 + 2;
 		dx = offset % 304;
@@ -432,6 +528,11 @@ void render_sprite(int list_entry)
 		fill_line(count, sx, sy, color);
 	
 		loc_d93c:
+		if (a2 >= VM_MEMORY_SIZE)
+		{
+			return;
+		}
+
 		d7 = get_byte(a2++);
 		if (d7 == 0x99)
 		{
@@ -461,6 +562,11 @@ void render_sprite(int list_entry)
 		/* d9a6 */
 		/* d2 is color */
 		loc_d9b4:
+		if (a2 + 3 >= VM_MEMORY_SIZE)
+		{
+			return;
+		}
+
 		offset = get_word(a2);
 		a2 += 2;
 	
@@ -473,6 +579,11 @@ void render_sprite(int list_entry)
 		fill_line_reversed(count, sx, sy, color);
 	
 		loc_d9e2:
+		if (a2 >= VM_MEMORY_SIZE)
+		{
+			return;
+		}
+
 		d7 = get_byte(a2++);
 		if (d7 == 0x99)
 		{
@@ -504,14 +615,15 @@ void render_sprite(int list_entry)
 */
 void draw_sprites()
 {
-	LOG_SPRITE("draw_sprites");
+	LOG(("draw_sprites"));
 
 	if (sprite_count != 0)
 	{
 		unsigned char d1;
+		int guard = 0;
 
 		d1 = first_sprite;
-		while (1)
+		while (d1 < MAX_SPRITES && guard++ <= MAX_SPRITES)
 		{
 			if ((sprites[d1].u1 & FLAG_HIDDEN) == 0)
 			{
@@ -525,7 +637,7 @@ void draw_sprites()
 				break;
 			}
 
-			LOG_SPRITE("linkedup to %d\n", d1);
+			LOG(("linkedup to %d\n", d1));
 		}
 	}
 }

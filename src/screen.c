@@ -54,7 +54,7 @@ void fill_line_reversed(int count, int x, int y, int color)
 
 	if (x < 0 || y < 0 || y > 191)
 	{
-		WARN("out of screen\n");
+		LOG(("out of screen\n"));
 		return;
 	}
 
@@ -81,12 +81,12 @@ void fill_line(int count, int x, int y, int color)
 {
 	unsigned char *bufp;
 
-	LOG_SCREEN("fill line count=%d, x=%d, y=%d, color=%d\n", count, x, y, color);
+	//LOG(("fill line count=%d, x=%d, y=%d, color=%d\n", count, x, y, color));
 
 	/* output offset */
-	if (x > 303 || y > 191 || y < 0)
+	if (x > 303 || y > 191 || y < 0 || count <= 0)
 	{
-		WARN("out of screen! (x=%d, y=%d)\n", x, y);
+		LOG(("WARN: out of screen! (x=%d, y=%d)\n", x, y));
 		return;
 	}
 
@@ -137,13 +137,13 @@ void copy_screen(int dest, int src)
 	src_surface = get_screen_ptr(masked_src);
 	dest_surface = get_screen_ptr(masked_dest);
 
-	LOG_SCREEN("copying surface %x onto %x\n", (unsigned)src_surface, (unsigned)dest_surface);
+	LOG(("copying surface %p onto %p\n", (void *)src_surface, (void *)dest_surface));
 	memcpy(dest_surface, src_surface, 304*192);
 }
 
 char *get_screen_ptr(int which)
 {
-	if (which <= 3)
+	if (which >= 0 && which <= 3)
 	{
 		return screens[which];
 	}
@@ -206,7 +206,7 @@ void update_screen(int which)
 		src = screen_visible;
 	}
 
-	render(src);
+	render((unsigned char *)src);
 }
 
 /** Returns the identifier of the working-screen

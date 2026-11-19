@@ -63,7 +63,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	}
 
 	loc_cf7a:
-	if (bitmask & (1 << bits_left))
+	if (bitmask & (1u << bits_left))
 	{
 		/* escaped literal */
 		*out++ = get_byte(packed++);
@@ -80,7 +80,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	}
 
 	loc_cf82:
-	if (bitmask & (1 << bits_left))
+	if (bitmask & (1u << bits_left))
 	{
 		goto loc_cfa4;
 	}
@@ -94,7 +94,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	}
 
 	d3 = get_byte(packed++);
-	if ((bitmask & (1 << bits_left)))
+	if ((bitmask & (1u << bits_left)))
 	{
 		d3 = d3 | 0x100;
 	}
@@ -114,7 +114,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	d6 = 1;
 
 	loc_cfac:
-	if (bitmask & (1 << bits_left))
+	if (bitmask & (1u << bits_left))
 	{
 		goto loc_cfd2;
 	}
@@ -129,7 +129,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	}
 
 	loc_cfb4:
-	if (bitmask & (1 << bits_left))
+	if (bitmask & (1u << bits_left))
 	{
 		d2 = d2 + d6;
 	}
@@ -172,7 +172,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	d6 = 1;
 
 	loc_cfee:
-	if (bitmask & (1 << bits_left))
+	if (bitmask & (1u << bits_left))
 	{
 		/* direct copy */
 		int count = d2 + d6 + 2;
@@ -194,7 +194,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 		bits_left = 31;
 	}
 
-	if ((bitmask & (1 << bits_left)))
+	if ((bitmask & (1u << bits_left)))
 	{
 		d2 = d2 + d6;
 	}

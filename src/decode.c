@@ -35,8 +35,8 @@
 #endif
 
 //////
-extern unsigned short variables[];
-extern unsigned short auxvars[];
+extern short variables[];
+extern short auxvars[];
 extern int current_room;
 extern int next_script;
 extern char first_sprite, last_sprite, sprite_count;
@@ -46,9 +46,11 @@ extern short new_task_pc[64];
 extern short enabled_tasks[64];
 extern short new_enabled_tasks[64];
 
-void load_room_screen(int room, int index);
+int load_room_screen(int room, int index);
 
-#if ENABLE_DEBUG
+//////
+
+#ifdef ENABLE_DEBUG
 static char *cmpopar[6] = {"==", "!=", ">", ">=", "<", "<="};
 #endif
 
@@ -75,6 +77,13 @@ static int pop()
 	assert(stack_ptr > 0);
 	stack_ptr--;
 	return stack[stack_ptr];
+}
+
+/** Returns non-zero when the sprite index is inside the sprite table
+*/
+static int valid_sprite(int entry)
+{
+	return entry >= 0 && entry < MAX_SPRITES;
 }
 
 /** Loads the next byte from script
@@ -149,9 +158,9 @@ void load_sprite(int index, int list_entry)
 	d0 = get_byte(a2++);
 	d1 = d1 - d0;
 	sprites[list_entry].y = d1;
-	LOG_SCRIPT("\n");
-	LOG_SCRIPT("sprites[%d].x == %d\n", list_entry, sprites[list_entry].x);
-	LOG_SCRIPT("sprites[%d].y == %d\n", list_entry, sprites[list_entry].y);
+	LOG(("\n"));
+	LOG(("sprites[%d].x == %d\n", list_entry, sprites[list_entry].x));
+	LOG(("sprites[%d].y == %d\n", list_entry, sprites[list_entry].y));
 
 	d0 = d0 >> 1;
 	d3 = d3 - d0;
@@ -188,7 +197,7 @@ void op_85()
 	return;
 
 	loc_bf88:
-	LOG_SCRIPT("NOT IMPLEMENTED!\n");
+	LOG(("NOT IMPLMENTED!\n"));
 	assert(0);
 }
 
@@ -202,7 +211,7 @@ void collision_against_set()
 	/* op_28 collision detection! */
 	d2 = d3 = 0;
 	entry_src = get_variable(next_pc());
-	LOG_SCRIPT("collision of sprite %d\n", entry_src);
+	LOG(("collision of sprite %d\n", entry_src));
 	if (sprite_count == 0)
 	{
 		/* no sprites at all! */
@@ -211,9 +220,17 @@ void collision_against_set()
 		return;
 	}
 
+	if (!valid_sprite(entry_src))
+	{
+		LOG(("invalid source sprite %d\n", entry_src));
+		set_variable(2, 0);
+		set_variable(3, 0);
+		return;
+	}
+
 	print_sprite(entry_src);
 
-	LOG_SCRIPT("\n\n");
+	LOG(("\n\n"));
 
 	entry_trg = first_sprite;
 
@@ -230,9 +247,9 @@ void collision_against_set()
 		goto next_sprite;
 	}
 
-	LOG_SCRIPT("checking collision against sprite %d\n", entry_trg);
-	LOG_SCRIPT("src (%d, %d) - (%d, %d)\n", sprites[entry_src].w4, sprites[entry_src].w5,  sprites[entry_src].w4 + sprites[entry_src].u6, sprites[entry_src].w5 + sprites[entry_src].u7);
-	LOG_SCRIPT("dst (%d, %d) - (%d, %d)\n", sprites[entry_trg].w4, sprites[entry_trg].w5,  sprites[entry_trg].w4 + sprites[entry_trg].u6, sprites[entry_trg].w5 + sprites[entry_trg].u7);
+	LOG(("checking collision against sprite %d\n", entry_trg));
+	LOG(("src (%d, %d) - (%d, %d)\n", sprites[entry_src].w4, sprites[entry_src].w5,  sprites[entry_src].w4 + sprites[entry_src].u6, sprites[entry_src].w5 + sprites[entry_src].u7)); 
+	LOG(("dst (%d, %d) - (%d, %d)\n", sprites[entry_trg].w4, sprites[entry_trg].w5,  sprites[entry_trg].w4 + sprites[entry_trg].u6, sprites[entry_trg].w5 + sprites[entry_trg].u7)); 
 
 	if (sprites[entry_trg].u3 == 0)
 	{
@@ -268,7 +285,7 @@ void collision_against_set()
 		goto next_sprite;
 	}
 
-	LOG_SCRIPT("A (%d, %d) / (%d, %d)\n", d6, d7, sprites[entry_trg].w4, sprites[entry_trg].w5);
+	LOG(("A (%d, %d) / (%d, %d)\n", d6, d7, sprites[entry_trg].w4, sprites[entry_trg].w5));
 
 	d4 = sprites[entry_trg].w4 + sprites[entry_trg].u6; 
 	d5 = sprites[entry_trg].w5 + sprites[entry_trg].u7; 
@@ -279,12 +296,12 @@ void collision_against_set()
 		goto next_sprite;
 	}
 
-	LOG_SCRIPT("B (d4=%d, d5=%d) / (w4=%d, w5=%d) required d4>=w4 && d5>=w5\n", d4, d5, sprites[entry_src].w4, sprites[entry_src].w5);
+	LOG(("B (d4=%d, d5=%d) / (w4=%d, w5=%d) required d4>=w4 && d5>=w5\n", d4, d5, sprites[entry_src].w4, sprites[entry_src].w5));
 
 	if (d3 == 0)
 	{
 		/* first collision! */
-		LOG_SCRIPT("collides because d3==0\n");
+		LOG(("collides because d3==0\n"));
 		goto collide;
 	}
 
@@ -303,7 +320,7 @@ void collision_against_set()
 		}
 
 		/* collision! */
-		LOG_SCRIPT("collides because a1.w4 > trg.w4 (%d >= %d) flipped=0\n", sprites[entry_a1].w4, sprites[entry_trg].w4);
+		LOG(("collides because a1.w4 > trg.w4 (%d >= %d) flipped=0\n", sprites[entry_a1].w4, sprites[entry_trg].w4));
 		goto collide;
 	}
 	else
@@ -315,14 +332,14 @@ void collision_against_set()
 		}
 
 		/* collision! */
-		LOG_SCRIPT("collides because a1.w4 < trg.w4 (%d >= %d) flipped=1\n", sprites[entry_a1].w4, sprites[entry_trg].w4);
+		LOG(("collides because a1.w4 < trg.w4 (%d >= %d) flipped=1\n", sprites[entry_a1].w4, sprites[entry_trg].w4));
 		goto collide;
 	}
 
 	collide:
 	d2 = sprites[entry_trg].u3;
 	d3 = entry_trg;
-	LOG_SCRIPT("colides with d3=%d d2=%d\n", d3, d2);
+	LOG(("colides with d3=%d d2=%d\n", d3, d2));
 
 	next_sprite:
 	entry_trg = sprites[entry_trg].next;
@@ -332,7 +349,7 @@ void collision_against_set()
 		goto loop;
 	}
 
-	LOG_SCRIPT("leaving op28 with d2=%d, d3=%d\n", d2, d3);
+	LOG(("leaving op28 with d2=%d, d3=%d\n", d2, d3));
 	set_variable(2, d2);
 	set_variable(3, d3);
 }
@@ -348,6 +365,12 @@ void op_27()
 	d1 = next_pc();
 
 	entry = d0;
+	if (!valid_sprite(entry))
+	{
+		LOG(("op_27: invalid sprite %d\n", entry));
+		set_variable(2, 0);
+		return;
+	}
 		
 	if (d1 & 0x80)
 	{
@@ -375,11 +398,11 @@ void op_27()
 			d0 = d0 + d1;
 			set_variable(2, d0);
 
-			LOG_SCRIPT("var[2] was set to 0x%x\n", d0);
+			LOG(("var[2] was set to 0x%x\n", d0));
 		}
 		else
 		{	
-			LOG_SCRIPT("loc_d1_ne_0x13: set_var(2, %d) d1=%d entry=%d\n", d1, entry, get_sprite_data_word(entry, d1));
+			LOG(("loc_d1_ne_0x13: set_var(2, %d) d1=%d entry=%d\n", d1, entry, get_sprite_data_word(entry, d1)));
 
 			set_variable(2, get_sprite_data_word(entry, d1));
 		}
@@ -391,15 +414,17 @@ void op_27()
 		d1 = sprites[entry].frame;
 		set_variable(2, d1 & 0x7f);
 		set_variable(3, d1 & 0x80);
-		LOG_SCRIPT("var[2] = frame(%d), var[3] = 7bit(0x%x)\n", d1 & 0x7f, d1 & 0x80);
+		LOG(("var[2] = frame(%d), var[3] = 7bit(0x%x)\n", d1 & 0x7f, d1 & 0x80));
 		return;
 	}
 
 	if (d1 < 16)
 	{
+		#ifdef ENABLE_DEBUG
 		int dummy = d1;
+		#endif
 		d1 = get_sprite_data_byte(entry, d1);
-		LOG_SCRIPT("get %s of sprite %d (0x%x)\n", sprite_data_byte_str[dummy], entry, d1);
+		LOG(("get %s of sprite %d (0x%x)\n", sprite_data_byte_str[dummy], entry, d1));
 		set_variable(2, d1);
 		return;
 	}
@@ -407,7 +432,7 @@ void op_27()
 	if (d1 == 16)
 	{
 		d1 = sprites[entry].frame & 0x7f;
-		LOG_SCRIPT("get frame of sprite %d (0x%x)\n", entry, d1);
+		LOG(("get frame of sprite %d (0x%x)\n", entry, d1));
 		set_variable(2, d1);
 		return;
 	}
@@ -415,7 +440,7 @@ void op_27()
 	if (d1 != 18)
 	{
 		d1 = sprites[entry].frame & 0x80;
-		LOG_SCRIPT("get frame-7th bit of sprite %d (0x%x)\n", entry, d1);
+		LOG(("get frame-7th bit of sprite %d (0x%x)\n", entry, d1));
 		set_variable(2, d1);
 		return;
 	}
@@ -435,7 +460,7 @@ void op_27()
 
 	set_variable(2, d1);
 	set_variable(3, d2);
-	LOG_SCRIPT("(d1 == 18), var[2] = 0x%x, var[3] = 0x%x\n", d1, d2);
+	LOG(("(d1 == 18), var[2] = 0x%x, var[3] = 0x%x\n", d1, d2));
 
 	/* passed, all okay */
 }
@@ -452,7 +477,14 @@ void op_24()
 
 	/* op24, collision of sprite against scene? */
 	spr = get_variable(next_pc());
-	LOG_SCRIPT("op24 on sprite=%d\n", spr);
+	if (!valid_sprite(spr))
+	{
+		LOG(("op24: invalid sprite %d\n", spr));
+		set_variable(2, 0);
+		set_variable(3, 0);
+		return;
+	}
+	LOG(("op24 on sprite=%d\n", spr));
 
 	/* op_24_1(); */
 	x1 = sprites[spr].x;
@@ -477,24 +509,24 @@ void op_24()
 
 	/* d5, sprite's y1 */
 	/* d7, sprite's y2 */
-	LOG_SCRIPT("sprite bounding box is (%d,%d)-(%d,%d)\n", x1, y1, x2, y2);
+	LOG(("sprite bounding box is (%d,%d)-(%d,%d)\n", x1, y1, x2, y2));
 
 	/* bc60 */
 	a3 = script_ptr;
 	d2 = get_variable(5);
-	LOG_SCRIPT("variable 5 is 0x%x\n", d2);
+	LOG(("variable 5 is 0x%x\n", d2));
 	d2 = extl(d2);
 	a3 = a3 + d2;
 	d0 = get_byte(a3);
 
-	LOG_SCRIPT("variable 4 is 0x%x\n", get_variable(4));
-	LOG_SCRIPT("comparing d1 > d0 (0x%x > 0x%x)\n", get_variable(4), d0);
+	LOG(("variable 4 is 0x%x\n", get_variable(4)));
+	LOG(("comparing d1 > d0 (0x%x > 0x%x)\n", get_variable(4), d0));
 	
 	saved_d0 = d0;
 	d1 = get_variable(4);
 	if (d1 > d0)
 	{
-		LOG_SCRIPT("d1 > d0, no collision\n");
+		LOG(("d1 > d0, no collision\n"));
 		goto no_collision;
 	}
 
@@ -508,7 +540,7 @@ void op_24()
 	a3 += 2;
 	if ((get_byte(a3 - 3) & 0x80) == 0)
 	{
-		LOG_SCRIPT("get_byte(a3 - 3) & 0x80 == 0\n");
+		LOG(("get_byte(a3 - 3) & 0x80 == 0\n"));
 		goto loc_bca8;
 	}
 
@@ -516,7 +548,7 @@ void op_24()
 	d2 = get_byte(a3++);
 	d3 = get_byte(a3++);
 	y1 = get_byte(a3);
-	LOG_SCRIPT("loaded batch 1: d2,d3,d5 = %d, %d, %d\n", d2, d3, y1);
+	LOG(("loaded batch 1: d2,d3,d5 = %d, %d, %d\n", d2, d3, y1));
 
 	/* checkpoint: all okay */
 	
@@ -558,7 +590,7 @@ void op_24()
 		d3 = 0;
 
 		leave_fn_2:
-		/* nothing to do */
+		d3 = d3; // keep gcc happy
 	}
 	/* all okay */
 
@@ -575,23 +607,23 @@ void op_24()
 	d2 = extl(get_word(a3));
 	a3 += 2;
 	d3 = get_byte(a3);
-	LOG_SCRIPT("bca8: loaded d2=0x%x, d3=0x%x\n", d2, d3);
+	LOG(("bca8: loaded d2=0x%x, d3=0x%x\n", d2, d3));
 	if (d3 != 0)
 	{
-		LOG_SCRIPT("d3 != 0, jmp bcba\n");
+		LOG(("d3 != 0, jmp bcba\n"));
 		goto loc_bcba;
 	}
 
 	/* op_24_3: cae0 */
 	{
 		d3 = 0;
-		LOG_SCRIPT("comparing d1<x1 or d1>x2 (d1=%d, d4=%d, x2=%d)\n", d1, x1, x2);
+		LOG(("comparing d1<x1 or d1>x2 (d1=%d, d4=%d, x2=%d)\n", d1, x1, x2));
 		if (d1 < x1 || d1 > x2)
 		{
 			goto loc_cb0c;
 		}
 
-		LOG_SCRIPT("comparing d2<y1 or d2>y2 (d2=%d, y1=%d, y2=%d)\n", d2, y1, y2);
+		LOG(("comparing d2<y1 or d2>y2 (d2=%d, y1=%d, y2=%d)\n", d2, y1, y2));
 		if (d2 < y1 || d2 > y2)
 		{
 			goto loc_cb0c;
@@ -609,7 +641,7 @@ void op_24()
 		}
 
 		loc_cb0c:
-		/* nothing to do */
+		d3 = d3; // keep gcc happy
 	}	
 	/* all okay */
 
@@ -632,7 +664,7 @@ void op_24()
 
 	/* op_24_4 cb0e */
 	{
-		LOG_SCRIPT("op_24_4 d2=%d, d3=%d, y1=%d, y2=%d\n", d2, d3, y1, y2);
+		LOG(("op_24_4 d2=%d, d3=%d, y1=%d, y2=%d\n", d2, d3, y1, y2));
 		if (d2 > y2)
 		{
 			goto loc_cb3e;
@@ -644,7 +676,7 @@ void op_24()
 			goto loc_cb3e;
 		}
 
-		LOG_SCRIPT("comparing d1<x1, d1>x2  -- %d<%d or %d>%d\n", d1, x1, d1, x2);
+		LOG(("comparing d1<x1, d1>x2  -- %d<%d or %d>%d\n", d1, x1, d1, x2));
 		if (d1 < x1 || d1 > x2)
 		{
 			goto loc_cb3e;
@@ -666,7 +698,7 @@ void op_24()
 		d3 = 0;
 
 		leave_fn_4:
-		/* nothing to do */
+		d3 = d3; // keep gcc happy
 	}
 
 	/* all okay */
@@ -759,7 +791,7 @@ void op_24()
 		d3 = 0;
 
 		leave_fn_6:
-		/* nothing to do */
+		d3 = d3; // keep gcc happy
 	}
 
 	if (d3 != 0)
@@ -769,7 +801,7 @@ void op_24()
 
 	loc_bce4:
 	/* continue */
-	LOG_SCRIPT("loop collisions d0=%d\n", d0);
+	LOG(("loop collisions d0=%d\n", d0));
 	if (d0 >= 0)
 	{
 		d0--;
@@ -777,7 +809,7 @@ void op_24()
 	}
 
 	no_collision:
-	LOG_SCRIPT("no_collision\n");
+	LOG(("no_collision\n"));
 	d3 = 0;
 	x1 = 0;
 
@@ -785,7 +817,7 @@ void op_24()
 	set_variable(2, d3);
 	set_variable(3, x1);
 
-	LOG_SCRIPT("post op24, var2=%d, var3=%d\n", d3, x1);
+	LOG(("post op24, var2=%d, var3=%d\n", d3, x1));
 
 	x1 = saved_d0 - d0 + 1;
 	set_variable(4, x1);
@@ -833,7 +865,7 @@ void add_sprite()
 		load_sprite(d1, entry_a6);
 		sprite_count++;
 
-		//LOG_SCRIPT("d2 == %d\n", d2);
+		//LOG(("d2 == %d\n", d2);
 		//print_hex(&sprites[d2][0], 16);
 	}
 	else
@@ -954,7 +986,7 @@ static int is_last_frame_in_animation(int entry)
 
 void op_89()
 {
-	int entry, d1, p;
+	int entry, d1, p, flip;
 
 	/* format 89 aa bb cc dd */
 	/* aa: sprite index in list */
@@ -964,10 +996,19 @@ void op_89()
 
 	entry = get_variable(next_pc());
 	d1 = next_pc();
+	p = next_pc();
+	flip = next_pc();
+
+	if (!valid_sprite(entry))
+	{
+		LOG(("op_89: invalid sprite %d\n", entry));
+		pc--;
+		return;
+	}
+
 	sprites[entry].index = d1;
 
-	p = next_pc();
-	if (next_pc() != 0)
+	if (flip != 0)
 	{
 		/* flipped */
 		p = p | 0x80;
@@ -991,8 +1032,14 @@ void op_2a()
 	which = next_pc();
 	which = get_variable(which);
 
+	if (!valid_sprite(which))
+	{
+		LOG(("op_2a: invalid sprite %d\n", which));
+		which = 0;
+	}
+
 	d0 = sprites[which].index;
-	LOG_SCRIPT("sprite d0 = %d\n", d0);
+	LOG(("sprite d0 = %d\n", d0));
 
 	a4 = get_long(0xf904) + (d0 << 2);
 	a4 = get_long(a4);
@@ -1006,7 +1053,7 @@ void op_2a()
 	d0++;
 
 	/* get_byte(a4) == total frames. d0 = current frame */
-	LOG_SCRIPT(" 	comparing d0 with get_byte(a4), %d with %d\n", d0, get_byte(a4));
+	LOG((" 	comparing d0 with get_byte(a4), %d with %d\n", d0, get_byte(a4)));
 	if (d0 > get_byte(a4))
 	{
 		/* c3f8 */
@@ -1014,7 +1061,7 @@ void op_2a()
 		d2 = get_byte(a4 + 1); /* hotspot x */
 		d3 = get_byte(a4 + 2); /* hotspot y */
 
-		LOG_SCRIPT("assigning d0, d2, d3 with %d %d %d\n", d0, d2, d3);
+		LOG(("assigning d0, d2, d3 with %d %d %d\n", d0, d2, d3));
 		sprites[which].frame = (sprites[which].frame & 0x80) | d0;
 	
 		d1 = get_word(a4 + d0*2 + 6);
@@ -1030,10 +1077,10 @@ void op_2a()
 		d2 = get_byte(a2 + 0); /* hotspot x */
 		d3 = get_byte(a2 + 1); /* hotspot y */
 
-		LOG_SCRIPT("d3 loaded is %d(%x)\n", d3, d3);
+		LOG(("d3 loaded is %d(%x)\n", d3, d3));
 	}
 
-	LOG_SCRIPT("before d3=%d after =%d\n", d3, extw(d3));
+	LOG(("before d3=%d after =%d\n", d3, extw(d3)));
 	d3 = extw(d3); 
 	d2 = extw(d2); 
 
@@ -1051,12 +1098,12 @@ void op_2a()
 		d0 = -d0;
 	}
 
-	LOG_SCRIPT("new sprites[which].x == %d\n", sprites[which].x);
+	LOG(("new sprites[which].x == %d\n", sprites[which].x));
 
 	/* loc_c45c: */
-	LOG_SCRIPT("before adding y=%d, d3=%d\n", sprites[which].y, d3);
+	LOG(("before adding y=%d, d3=%d\n", sprites[which].y, d3));
 	sprites[which].y += d3;
-	LOG_SCRIPT("new sprites[which].y == %d (which=%d)\n", sprites[which].y, which);
+	LOG(("new sprites[which].y == %d (which=%d)\n", sprites[which].y, which));
 	
 	/* c460 */
 	d1 = get_byte(a4 + 3);
@@ -1076,7 +1123,7 @@ void op_2a()
 	d0 = d0 + dummy;
 	sprites[which].w5 = d0;
 
-	//LOG_SCRIPT("after 2a:\n");
+	//LOG(("after 2a:\n");
 	//print_hex(&sprites[which][0], 16);
 }
 
@@ -1090,6 +1137,12 @@ void op_2b()
 	d0 = get_variable(next_pc());
 	d1 = next_pc();
 	entry = d0;
+
+	if (!valid_sprite(entry))
+	{
+		LOG(("op_2b: invalid sprite %d\n", entry));
+		entry = 0;
+	}
 
 	if (d1 & 0x80)
 	{
@@ -1212,7 +1265,8 @@ void op_2b()
 	goto loc_c2aa;
 
 	loc_c33c:
-	/* nothing to do */
+	/* keep gcc happy */
+	d0 = d0;
 }
 
 void op_70()
@@ -1224,7 +1278,13 @@ void op_70()
 	d1 = next_pc();
 	entry = d0;
 
-	LOG_SCRIPT("op70 d0=%d, d1=%d\n", d0, d1);
+	if (!valid_sprite(entry))
+	{
+		LOG(("op_70: invalid sprite %d\n", entry));
+		entry = 0;
+	}
+
+	LOG(("op70 d0=%d, d1=%d\n", d0, d1));
 
 	if (d1 & 0x80)
 	{
@@ -1284,7 +1344,7 @@ void op_70()
 	dummy = sprites[entry].x;
 	dummy = dummy - d1;
 	sprites[entry].x = dummy;
-	LOG_SCRIPT("loc_c0ec new sprite.x = %d\n", dummy);
+	LOG(("loc_c0ec new sprite.x = %d\n", dummy));
 	goto loc_mainloop;
 
 	loc_c106:
@@ -1361,7 +1421,7 @@ void op_70()
 	d1 = get_byte(a2++);
 	d0 = d0 - d1;
 	sprites[entry].y = d0;
-	LOG_SCRIPT("loc_c190 new sprite.y = %d\n", d0);
+	LOG(("loc_c190 new sprite.y = %d\n", d0));
 	d1 = d1 >> 1;
 	d3 = d3 - d1;
 	d0 = get_byte(a4+4);
@@ -1393,7 +1453,7 @@ void new_task()
 
 	/* enable new task 'd0' at offset 'd1' */
 
-	LOG_TASK("*newtask* op_08 d0=%x d1=%x\n", d0, d1);
+	LOG(("*newtask* op_08 d0=%x d1=%x\n", d0, d1));
 
 	new_task_pc[d0] = d1;
 	task_pc[d0] = -1;
@@ -1429,7 +1489,7 @@ void new_task()
 			d0--;
 			d1 = next_pc();
 			auxvars[a2] = get_variable(d1);
-			LOG_TASK("auxvars[%d][%d] == var[%d] (=0x%x)\n", a2/32, a2%32, d1, auxvars[a2]);
+			LOG(("auxvars[%d][%d] == var[%d] (=0x%x)\n", a2/32, a2%32, d1, auxvars[a2]));
 			a2++;
 		}
 
@@ -1442,7 +1502,7 @@ void new_task()
 		{
 			d0--;
 			auxvars[a2] = next_pc_word();
-			LOG_TASK("auxvars[%d][%d] == 0x%x\n", a2/32, a2%32, auxvars[a2]);
+			LOG(("auxvars[%d][%d] == 0x%x\n", a2/32, a2%32, auxvars[a2]));
 			a2++;
 		}
 
@@ -1475,6 +1535,8 @@ void destroy_tasks()
 
 	loc_76a2:
 	d2 = next_pc();
+	LOG(("destroy tasks %d..%d state %d\n", d0, d0 + d1, d2));
+
 	if (d2 != 3)
 	{
 		goto loc_76d2;
@@ -1504,7 +1566,7 @@ void destroy_tasks()
 	while (d1 >= 0)
 	{
 		new_enabled_tasks[d0+d1] = d2;
-		enabled_tasks[d1] = d2;
+		enabled_tasks[d0+d1] = d2;
 		d1--;
 	}
 
@@ -1516,7 +1578,7 @@ void destroy_tasks()
 	while (d1 >= 0)
 	{
 		new_task_pc[d0+d1] = -2;
-		enabled_tasks[d1] = -2;
+		enabled_tasks[d0+d1] = -2;
 		d1--;
 	}
 }
@@ -1546,7 +1608,7 @@ int decode(int current_task, int start_pc)
 		opcode = next_pc();
 
 		mark_opcode(opcode);
-		LOG_SCRIPT("(%d) task: %d: %04x 0x%02x: ", stack_ptr, current_task, pc-1, opcode);
+		LOG(("(%d) task: %d: %04x 0x%02x: ", stack_ptr, current_task, pc-1, opcode));
 	
 		switch(opcode)
 		{
@@ -1556,7 +1618,7 @@ int decode(int current_task, int start_pc)
 			imm16 = next_pc_word();
 			set_variable(var1, imm16);
 	
-			LOG_SCRIPT("var[%d] = 0x%x\n", var1, imm16);
+			LOG(("var[%d] = 0x%x\n", var1, imm16));
 			break;
 	
 			case 0x01:
@@ -1565,7 +1627,7 @@ int decode(int current_task, int start_pc)
 			var2 = next_pc();
 			set_variable(var1, get_variable(var2));
 	
-			LOG_SCRIPT("var[%d] = var[%d] (=0x%x)\n", var1, var2, get_variable(var2));
+			LOG(("var[%d] = var[%d] (=0x%x)\n", var1, var2, get_variable(var2)));
 			break;
 
 			case 0x02:
@@ -1574,7 +1636,7 @@ int decode(int current_task, int start_pc)
 			var2 = next_pc();
 			set_variable(var1, get_variable(var1) + get_variable(var2));
 
-			LOG_SCRIPT("var[%d] += var[%d] (now 0x%x)\n", var1, var2, get_variable(var1));
+			LOG(("var[%d] += var[%d] (now 0x%x)\n", var1, var2, get_variable(var1)));
 			break;
 
 			case 0x03:
@@ -1583,7 +1645,7 @@ int decode(int current_task, int start_pc)
 			imm16 = next_pc_word();
 			set_variable(var1, get_variable(var1) + imm16);
 
-			LOG_SCRIPT("var[%d] += 0x%x (now 0x%x)\n", var1, imm16, get_variable(var1));
+			LOG(("var[%d] += 0x%x (now 0x%x)\n", var1, imm16, get_variable(var1)));
 			break;
 	
 			case 0x04:
@@ -1592,28 +1654,28 @@ int decode(int current_task, int start_pc)
 			push(pc);
 			pc = imm16;
 	
-			LOG_SCRIPT("call 0x%x\n", imm16);
+			LOG(("call 0x%x\n", imm16));
 			break;
 	
 			case 0x05:
 			pc = pop();
-			LOG_SCRIPT("ret\n");
+			LOG(("ret\n"));
 			break;
 	
 			case 0x06:
-			LOG_SCRIPT("yield\n");
+			LOG(("yield\n"));
 			leave = 1;
 			break;
 	
 			case 0x07:
 			jmpto = next_pc_word();
 			pc = jmpto;
-			LOG_SCRIPT("jmp 0x%x\n", jmpto);
+			LOG(("jmp 0x%x\n", jmpto));
 			break;
 	
 			case 0x08:
 			new_task();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 	
 			case 0x09:
@@ -1629,7 +1691,7 @@ int decode(int current_task, int start_pc)
 				pc = jmpto;
 			}
 	
-			LOG_SCRIPT("dbf var[%d], goto 0x%x(now=0x%x)\n", var1, jmpto, imm16);
+			LOG(("dbf var[%d], goto 0x%x(now=0x%x)\n", var1, jmpto, imm16));
 			break;
 	
 			case 0x0a:
@@ -1645,21 +1707,21 @@ int decode(int current_task, int start_pc)
 				var2 = next_pc();
 				jmpto = next_pc_word();
 				imm16_2 = get_variable(var2);
-				LOG_SCRIPT("if var[%d] %s var[%d] goto 0x%x(lv=%x, rv=%x)\n", var1, cmpopar[compare_op & 0x07], var2, jmpto, imm16, imm16_2);
+				LOG(("if var[%d] %s var[%d] goto 0x%x(lv=%x, rv=%x)\n", var1, cmpopar[compare_op & 0x07], var2, jmpto, imm16, imm16_2));
 			}
 			else if (compare_op & 0x40)
 			{
 				/* rvalue imm16 */
 				imm16_2 = next_pc_word();
 				jmpto = next_pc_word();
-				LOG_SCRIPT("(imm16) if var[%d] %s %d goto 0x%x (lv=%x)\n", var1, cmpopar[compare_op & 0x07], imm16_2, jmpto, imm16);
+				LOG(("(imm16) if var[%d] %s %d goto 0x%x (lv=%x)\n", var1, cmpopar[compare_op & 0x07], imm16_2, jmpto, imm16));
 			}
 			else
 			{
 				/* rvalue unsigned imm8 */
 				imm16_2 = next_pc();
 				jmpto = next_pc_word();
-				LOG_SCRIPT("(imm8) if var[%d] %s %d goto 0x%x (lv=%x)\n", var1, cmpopar[compare_op & 0x07], imm16_2, jmpto, imm16);
+				LOG(("(imm8) if var[%d] %s %d goto 0x%x (lv=%x)\n", var1, cmpopar[compare_op & 0x07], imm16_2, jmpto, imm16));
 			}
 	
 			switch(compare_op & 0x07)
@@ -1707,7 +1769,7 @@ int decode(int current_task, int start_pc)
 				break;
 	
 				default:
-				LOG_SCRIPT("UNKNOWN COMPARE OPERATOR! %d\n", compare_op & 0x07);
+				LOG(("UNKNOWN COMPARE OPERATOR! %d\n", compare_op & 0x07));
 				assert(0);
 				break;
 			}
@@ -1718,12 +1780,12 @@ int decode(int current_task, int start_pc)
 			imm8 = next_pc();
 	
 			set_palette(imm8);
-			LOG_SCRIPT("set palette %d\n", imm8);
+			LOG(("set palette %d\n", imm8));
 			break;
 	
 			case 0x0c:
 			destroy_tasks();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 
 			case 0x0d:
@@ -1731,7 +1793,7 @@ int decode(int current_task, int start_pc)
 			imm8 = next_pc();
 	
 			select_screen(imm8);
-			LOG_SCRIPT("select screen %d\n", imm8);
+			LOG(("select screen %d\n", imm8));
 			break;
 
 			case 0x0e:
@@ -1740,7 +1802,7 @@ int decode(int current_task, int start_pc)
 			imm8_2 = next_pc();
 	
 			fill_screen(imm8, imm8_2);
-			LOG_SCRIPT("fill screen%d with color %d\n", imm8, imm8_2);
+			LOG(("fill screen%d with color %d\n", imm8, imm8_2));
 			break;
 
 			case 0x0f:
@@ -1749,27 +1811,27 @@ int decode(int current_task, int start_pc)
 			imm8_2 = next_pc();
 	
 			copy_screen(imm8_2, imm8);
-			LOG_SCRIPT("screen%d <= screen%d\n", imm8_2, imm8);
+			LOG(("screen%d <= screen%d\n", imm8_2, imm8));
 			break;
 	
 			case 0x10:
 			imm8 = next_pc();
 			update_screen(imm8);
-			LOG_SCRIPT("update screen %d\n", imm8);
+			LOG(("update screen %d\n", imm8));
 			break;
 
 			case 0x11:
 			/* terminate task */
 			leave = 1;
 			pc = -1;
-			LOG_TASK("terminate task %d!\n", current_task);
+			LOG(("terminate task!\n"));
 			break;
 	
 			case 0x13:
 			var1 = next_pc();
 			var2 = next_pc();
 	
-			LOG_SCRIPT("var[%d] -= var[%d]\n", var1, var2);
+			LOG(("var[%d] -= var[%d]\n", var1, var2));
 
 			set_variable(var1, get_variable(var1) - get_variable(var2));
 			break;
@@ -1779,26 +1841,33 @@ int decode(int current_task, int start_pc)
 			imm16 = next_pc_word();
 			set_variable(var1, get_variable(var1) & imm16);
 	
-			LOG_SCRIPT("var[%d] &= 0x%x\n", var1, imm16);
+			LOG(("var[%d] &= 0x%x\n", var1, imm16));
 			break;
 	
 			case 0x15:
 			var1 = next_pc();
 			imm16 = next_pc_word();
 			set_variable(var1, imm16 | get_variable(var1));
-			LOG_SCRIPT("var[%d] |= 0x%x\n", var1, imm16);
+			LOG(("var[%d] |= 0x%x\n", var1, imm16));
 			break;
 
 			case 0x17:
 			var1 = next_pc();
 			imm8 = next_pc();
-			imm16 = extl(get_variable(var1)) >> imm8;
+			if (imm8 >= 32)
+			{
+				imm16 = (get_variable(var1) < 0) ? -1 : 0;
+			}
+			else
+			{
+				imm16 = extl(get_variable(var1)) >> imm8;
+			}
 			set_variable(var1, imm16);
-			LOG_SCRIPT("var[%d] >>= %d (now 0x%x)\n", var1, imm8, imm16);
+			LOG(("var[%d] >>= %d (now 0x%x)\n", var1, imm8, imm16));
 			break;
 
 			case 0x18:
-			LOG_SCRIPT("play sample");
+			LOG(("play sample"));
 			sample_index = next_pc();
 			sample_volume = next_pc();
 			sample_channel = next_pc();
@@ -1808,11 +1877,14 @@ int decode(int current_task, int start_pc)
 			case 0x19:
 			/* load screen imm16 */
 			imm16 = next_pc_word();
-			LOG_SCRIPT("load screen %d (0x%x)\n", imm16, imm16);
+			LOG(("load screen %d (0x%x)\n", imm16, imm16));
 
 			if (imm16 < 16000)
 			{
-				load_room_screen(current_room, imm16);
+				if (load_room_screen(current_room, imm16) < 0)
+				{
+					LOG(("failed to load screen %d\n", imm16));
+				}
 			}
 			else if (imm16 >= 17000 && imm16 <= 17100)
 			{
@@ -1834,17 +1906,6 @@ int decode(int current_task, int start_pc)
 				{
 					next_script = 8;
 				}
-				#if 0
-				/* FIXME c1: this happens when game over screen is left
-				 * with variable 226 != 0
-				 */
-				else if (next_script == 9)
-				{
-					/* return to password selection */
-					next_script = 7;
-					leave = 1;
-				}
-				#endif
 				else if (next_script == 7)
 				{
 					play_music_track(35, 0);
@@ -1881,7 +1942,7 @@ int decode(int current_task, int start_pc)
 	
 			case 0x1a:
 			imm8 = next_pc();
-			LOG_SCRIPT("play audio track %d\n", imm8);
+			LOG(("play audio track %d\n", imm8));
 
 			if (imm8 == 0)
 			{
@@ -1893,13 +1954,13 @@ int decode(int current_task, int start_pc)
 				/* one shot */
 				imm8 = imm8 - 100 - 1;
 
-				LOG_SCRIPT("play single audio track %d\n", imm8);
+				LOG(("play single audio track %d\n", imm8));
 				play_music_track(imm8, 0);
 			}
 			else
 			{
 				imm8 = imm8 - 1;
-				LOG_SCRIPT("play audio track %d\n", imm8);
+				LOG(("play audio track %d\n", imm8));
 	
 				play_music_track(imm8, 1);
 			}
@@ -1910,7 +1971,7 @@ int decode(int current_task, int start_pc)
 			imm16 = get_variable(var1);
 
 			imm8 = next_pc();
-			LOG_SCRIPT("switch of variable %d over %d cases\n", var1, imm8);
+			LOG(("switch of variable %d over %d cases\n", var1, imm8));
 
 			while (imm8 > 0)
 			{
@@ -1932,7 +1993,7 @@ int decode(int current_task, int start_pc)
 			imm16 = get_variable(var1);
 
 			imm8 = next_pc();
-			LOG_SCRIPT("switch of variable %d over %d cases\n", var1, imm8);
+			LOG(("switch of variable %d over %d cases\n", var1, imm8));
 
 			while (imm8 > 0)
 			{
@@ -1958,7 +2019,7 @@ int decode(int current_task, int start_pc)
 				pc = jmpto;
 			}
 	
-			LOG_SCRIPT("if var[%d] == 0 goto 0x%x\n", var1, jmpto);
+			LOG(("if var[%d] == 0 goto 0x%x\n", var1, jmpto));
 			break;
 	
 			case 0x1f:
@@ -1970,22 +2031,22 @@ int decode(int current_task, int start_pc)
 				pc = jmpto;
 			}
 	
-			LOG_SCRIPT("if var[%d] != 0x00 goto 0x%x(lv=0x%x)\n", var1, jmpto, get_variable(var1));
+			LOG(("if var[%d] != 0x00 goto 0x%x(lv=0x%x)\n", var1, jmpto, get_variable(var1)));
 			break;
 
 			case 0x21:
 			imm8 = next_pc() % 32;
-			LOG_SCRIPT("play death animation %d\n", imm8);
+			LOG(("play death animation %d\n", imm8));
 			play_death_animation(imm8);
 			break;
 	
 			case 0x24:
 			op_24();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 	
 			case 0x25:
-			LOG_SCRIPT("add sprite\n");
+			LOG(("add sprite\n"));
 			add_sprite();
 			break;
 	
@@ -1998,25 +2059,25 @@ int decode(int current_task, int start_pc)
 			break;
 
 			case 0x28:
-			LOG_SCRIPT("collision against set\n");
+			LOG(("collision against set\n"));
 			collision_against_set();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 
 			case 0x29:
 			imm8 = next_pc();
-			LOG_SCRIPT("remove sprite %d\n", imm8);
+			LOG(("remove sprite %d\n", imm8));
 			remove_sprite(imm8);
 			break;
 	
 			case 0x2a:
 			op_2a();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 
 			case 0x2b:
 			op_2b();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 
 			case 0x2c:
@@ -2026,7 +2087,7 @@ int decode(int current_task, int start_pc)
 			x = extw(next_pc());
 			y = extw(next_pc());
 
-			LOG_SCRIPT("move sprite %d by (%d, %d)\n", imm16, x, y);
+			LOG(("move sprite %d by (%d, %d)\n", imm16, x, y));
 
 			move_sprite_by(imm16, x, y);
 			break;
@@ -2035,7 +2096,7 @@ int decode(int current_task, int start_pc)
 			case 0x2e:
 			case 0x2f:
 			case 0x30:
-			LOG_SCRIPT("nop\n");
+			LOG(("nop\n"));
 			break;
 
 			case 0x31:
@@ -2043,122 +2104,122 @@ int decode(int current_task, int start_pc)
 			imm16 = get_variable(var1);
 
 			flip_sprite(imm16);
-			LOG_SCRIPT("mirror/unmirror sprite %d\n", imm16);
+			LOG(("mirror/unmirror sprite %d\n", imm16));
 			break;
 
 			case 0x32:
 			imm16 = get_variable(next_pc());
 
 			mirror_sprite(imm16);
-			LOG_SCRIPT("mirror sprite %d\n", imm16);
+			LOG(("mirror sprite %d\n", imm16));
 			break;
 
 			case 0x33:
 			imm16 = get_variable(next_pc());
 			unmirror_sprite(imm16);
-			LOG_SCRIPT("unmirror sprite %d\n", imm16);
+			LOG(("unmirror sprite %d\n", imm16));
 			break;
 
 			case 0x34:
-			LOG_SCRIPT("d4=0\n");
+			LOG(("d4=0\n"));
 			saved_d4 = 0;
 			break;
 
 			case 0x35:
-			LOG_SCRIPT("d5=0\n");
+			LOG(("d5=0\n"));
 			saved_d5 = 0;
 			break;
 
 			case 0x36:
 			saved_d4 = next_pc_word();
-			LOG_SCRIPT("saved_d4 = 0x%x\n", saved_d4);
+			LOG(("saved_d4 = 0x%x\n", saved_d4));
 			break;
 
 			case 0x37:
 			saved_d5 = next_pc_word();
-			LOG_SCRIPT("saved_d5 = 0x%x\n", saved_d5);
+			LOG(("saved_d5 = 0x%x\n", saved_d5));
 			break;
 
 			case 0x38:
 			imm16 = next_pc_word();
 			saved_d4 = saved_d4 + imm16;
-			LOG_SCRIPT("d4 += %d (now %d)\n", imm16, saved_d4);
+			LOG(("d4 += %d (now %d)\n", imm16, saved_d4));
 			break;
 
 			case 0x39:
 			imm16 = next_pc_word();
 			saved_d5 = saved_d5 + imm16;
-			LOG_SCRIPT("d5 += %d (now %d)\n", imm16, saved_d5);
+			LOG(("d5 += %d (now %d)\n", imm16, saved_d5));
 			break;
 
 			case 0x3a:
 			imm16 = next_pc_word();
 			saved_d4 &= imm16;
-			LOG_SCRIPT("d4 &= 0x%x (now=%x)\n", imm16, saved_d4);
+			LOG(("d4 &= 0x%x (now=%x)\n", imm16, saved_d4));
 			break;
 
 			case 0x3b:
 			imm16 = next_pc_word();
 			saved_d5 &= imm16;
-			LOG_SCRIPT("d5 &= 0x%x (now=%x)\n", imm16, saved_d5);
+			LOG(("d5 &= 0x%x (now=%x)\n", imm16, saved_d5));
 			break;
 
 			case 0x3e:
-			imm8 = next_pc();
-			LOG_SCRIPT("d4 <<= %d\n", imm8);
+			imm8 = next_pc() & 31;
+			LOG(("d4 <<= %d\n", imm8));
 			saved_d4 <<= imm8;
 			break;
 
 			case 0x3f:
-			imm8 = next_pc();
-			LOG_SCRIPT("d5 <<= %d\n", imm8);
+			imm8 = next_pc() & 31;
+			LOG(("d5 <<= %d\n", imm8));
 			saved_d5 <<= imm8;
 			break;
 	
 			case 0x40:
-			imm8 = next_pc();
+			imm8 = next_pc() & 31;
 			saved_d4 = extl(saved_d4) >> imm8;
-			LOG_SCRIPT("saved_d4 >>= %d (now 0x%x)\n", imm8, saved_d4);
+			LOG(("saved_d4 >>= %d (now 0x%x)\n", imm8, saved_d4));
 			break;
 
 			case 0x41:
-			imm8 = next_pc();
+			imm8 = next_pc() & 31;
 			saved_d5 = extl(saved_d5) >> imm8;
-			LOG_SCRIPT("saved_d5 >>= %d (now 0x%x)\n", imm8, saved_d5);
+			LOG(("saved_d5 >>= %d (now 0x%x)\n", imm8, saved_d5));
 			break;
 
 			case 0x42:
 			saved_d4 = saved_d5;
-			LOG_SCRIPT("saved_d4 = saved_d5\n");
+			LOG(("saved_d4 = saved_d5\n"));
 			break;
 
 			case 0x43:
 			saved_d5 = saved_d4;
-			LOG_SCRIPT("d5 = d4\n");
+			LOG(("d5 = d4\n"));
 			break;
 
 			case 0x4a:
 			var1 = next_pc();
 			saved_d4 = get_variable(var1);
-			LOG_SCRIPT("saved_d4 = var[%d] (=0x%x)\n", var1, saved_d4);
+			LOG(("saved_d4 = var[%d] (=0x%x)\n", var1, saved_d4));
 			break;
 
 			case 0x4b:
 			var1 = next_pc();
 			saved_d5 = get_variable(var1);
-			LOG_SCRIPT("saved_d5 = var[%d] (=0x%x)\n", var1, saved_d5);
+			LOG(("saved_d5 = var[%d] (=0x%x)\n", var1, saved_d5));
 			break;
 			
 			case 0x4c:
 			var1 = next_pc();
 			set_variable(var1, saved_d4);
-			LOG_SCRIPT("var[%d] = saved_d4 (=0x%x)\n", var1, saved_d4);
+			LOG(("var[%d] = saved_d4 (=0x%x)\n", var1, saved_d4));
 			break;
 
 			case 0x4d:
 			var1 = next_pc();
 			set_variable(var1, saved_d5);
-			LOG_SCRIPT("var[%d] = saved_d5 (=0x%x)\n", var1, saved_d5);
+			LOG(("var[%d] = saved_d5 (=0x%x)\n", var1, saved_d5));
 			break;
 
 			case 0x54:
@@ -2166,7 +2227,7 @@ int decode(int current_task, int start_pc)
 			imm16 = next_pc_word();
 			jmpto = next_pc_word();
 
-			LOG_SCRIPT("if d4 %s 0x%04x goto 0x%x(lv=%x)\n", cmpopar[compare_op], imm16, jmpto, saved_d4);
+			LOG(("if d4 %s 0x%04x goto 0x%x(lv=%x)\n", cmpopar[compare_op], imm16, jmpto, saved_d4));
 			
 			switch(compare_op)
 			{
@@ -2213,7 +2274,7 @@ int decode(int current_task, int start_pc)
 				break;
 				
 				default:
-				LOG_SCRIPT("UNKNOWN COMPARE OP %d\n", compare_op);
+				LOG(("UNKNOWN COMPARE OP %d\n", compare_op));
 			}
 			break;
 
@@ -2222,38 +2283,38 @@ int decode(int current_task, int start_pc)
 			var1 = next_pc();
 			set_variable(var1, 0);
 	
-			LOG_SCRIPT("var[%d] = 0\n", var1);
+			LOG(("var[%d] = 0\n", var1));
 			break;
 
 			case 0x5c:
 			var1 = next_pc();
 			set_variable(var1, get_variable(var1) + saved_d4);
-			LOG_SCRIPT("var[%d] += d4 (now 0x%04x)\n", var1, get_variable(var1));
+			LOG(("var[%d] += d4 (now 0x%04x)\n", var1, get_variable(var1)));
 			break;
 
 			case 0x5d:
 			var1 = next_pc();
 			set_variable(var1, get_variable(var1) + saved_d5);
-			LOG_SCRIPT("var[%d] += d5 (now 0x%04x)\n", var1, get_variable(var1));
+			LOG(("var[%d] += d5 (now 0x%04x)\n", var1, get_variable(var1)));
 			break;
 
 			case 0x5e:
 			var1 = next_pc();         
 			saved_d4 = saved_d4 - get_variable(var1);
-			LOG_SCRIPT("d4 -= var[%d] (now 0x%x)\n", var1, saved_d4);
+			LOG(("d4 -= var[%d] (now 0x%x)\n", var1, saved_d4));
 			break;
 
 			case 0x5f:
 			var1 = next_pc();
 			saved_d5 = saved_d5 - get_variable(var1);
-			LOG_SCRIPT("d5 -= var[%d] (now 0x%x)\n", var1, saved_d5);
+			LOG(("d5 -= var[%d] (now 0x%x)\n", var1, saved_d5));
 			break;
 
 			case 0x60:
 			var1 = next_pc();
 			imm16 = get_variable(var1) - saved_d4;
 			set_variable(var1, imm16);
-			LOG_SCRIPT("var[%d] -= d4 (now 0x%x)\n", var1, imm16);
+			LOG(("var[%d] -= d4 (now 0x%x)\n", var1, imm16));
 			break;
 
 			case 0x66:
@@ -2262,7 +2323,7 @@ int decode(int current_task, int start_pc)
 			imm16 = get_variable(var1);
 			jmpto = next_pc_word();
 			                          
-			LOG_SCRIPT("if d4 %s var[%d] goto 0x%x(lv=%x, rv=%x)\n", cmpopar[compare_op], var1, jmpto, saved_d4, imm16);
+			LOG(("if d4 %s var[%d] goto 0x%x(lv=%x, rv=%x)\n", cmpopar[compare_op], var1, jmpto, saved_d4, imm16));
 			
 			switch(compare_op)
 			{
@@ -2309,7 +2370,7 @@ int decode(int current_task, int start_pc)
 				break;
 				
 				default:
-				LOG_SCRIPT("UNKNOWN COMPARE OP %d\n", compare_op);
+				LOG(("UNKNOWN COMPARE OP %d\n", compare_op));
 				assert(0);
 			}
 			break;
@@ -2321,7 +2382,7 @@ int decode(int current_task, int start_pc)
 			imm16 = get_variable(var1);
 			jmpto = next_pc_word();
 
-			LOG_SCRIPT("if d5 %s var[%d] goto 0x%x(lv=%x, rv=%x)\n", cmpopar[compare_op], var1, jmpto, saved_d4, imm16);
+			LOG(("if d5 %s var[%d] goto 0x%x(lv=%x, rv=%x)\n", cmpopar[compare_op], var1, jmpto, saved_d4, imm16));
 			
 			switch(compare_op)
 			{
@@ -2368,7 +2429,7 @@ int decode(int current_task, int start_pc)
 				break;
 				
 				default:
-				LOG_SCRIPT("UNKNOWN COMPARE OP %d\n", compare_op);
+				LOG(("UNKNOWN COMPARE OP %d\n", compare_op));
 				assert(0);
 			}
 			break;
@@ -2376,12 +2437,12 @@ int decode(int current_task, int start_pc)
 			case 0x68:
 			imm8 = next_pc(); /* count */
 
-			LOG_SCRIPT("switch of d4 with %d cases (d4 == 0x%x)\n", imm8, saved_d4);
+			LOG(("switch of d4 with %d cases (d4 == 0x%x)\n", imm8, saved_d4));
 			while (imm8 > 0)
 			{
 				imm16 = next_pc_word();
 				jmpto = next_pc_word();
-				LOG_SCRIPT("on 0x%x --> goto 0x%x\n", imm16, jmpto);
+				LOG(("on 0x%x --> goto 0x%x\n", imm16, jmpto));
 
 				if (imm16 == saved_d4)
 				{
@@ -2395,12 +2456,12 @@ int decode(int current_task, int start_pc)
 
 			case 0x69:
 			saved_d5 = extw(next_pc());
-			LOG_SCRIPT("d5 = %d\n", saved_d5);
+			LOG(("d5 = %d\n", saved_d5));
 			break;
 
 			case 0x6a:
 			jmpto = next_pc_word();
-			LOG_SCRIPT("if d4 == 0 goto 0x%x (d4=0x%x)\n", jmpto, saved_d4);
+			LOG(("if d4 == 0 goto 0x%x (d4=0x%x)\n", jmpto, saved_d4));
 			if (saved_d4 == 0)
 			{
 				pc = jmpto;	
@@ -2409,7 +2470,7 @@ int decode(int current_task, int start_pc)
 
 			case 0x6b:
 			jmpto = next_pc_word();
-			LOG_SCRIPT("if d5 == 0 goto 0x%x (d5=0x%x)\n", jmpto, saved_d5);
+			LOG(("if d5 == 0 goto 0x%x (d5=0x%x)\n", jmpto, saved_d5));
 			if (saved_d5 == 0)
 			{
 				pc = jmpto;	
@@ -2419,7 +2480,7 @@ int decode(int current_task, int start_pc)
 			case 0x6c:
 			case 0x6d:
 			jmpto = next_pc_word();
-			LOG_SCRIPT("if d4 != 0 goto 0x%x (d4=0x%x)\n", jmpto, saved_d4);
+			LOG(("if d4 != 0 goto 0x%x (d4=0x%x)\n", jmpto, saved_d4));
 			if (saved_d4 != 0)
 			{
 				pc = jmpto;	
@@ -2428,77 +2489,91 @@ int decode(int current_task, int start_pc)
 
 			case 0x6e:
 			saved_d4 = extw(next_pc());
-			LOG_SCRIPT("d4 = %d (0x%x)\n", saved_d4, saved_d4);
+			LOG(("d4 = %d (0x%x)\n", saved_d4, saved_d4));
 			break;
 
 
 			case 0x6f:
 			saved_d5 = extw(next_pc());
-			LOG_SCRIPT("d5 = %d (0x%x)\n", saved_d5, saved_d5);
+			LOG(("d5 = %d (0x%x)\n", saved_d5, saved_d5));
 			break;
 
 			case 0x70:
 			op_70();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 	
 			case 0x71:
 			var1 = next_pc();
 			set_variable(var1, get_variable(var1) + 1);
-			LOG_SCRIPT("var[%d]++\n", var1);
+			LOG(("var[%d]++\n", var1));
 			break;
 	
 			case 0x72: 
 			var1 = next_pc();
 			set_variable(var1, get_variable(var1) - 1);
-			LOG_SCRIPT("var[%d]--\n", var1);
+			LOG(("var[%d]--\n", var1));
 			break;
 
 			case 0x73:
 			saved_d4++;
-			LOG_SCRIPT("d4++ (now 0x%x)\n", saved_d4);
+			LOG(("d4++ (now 0x%x)\n", saved_d4));
 			break;
 
 			case 0x74:
 			saved_d5++;
-			LOG_SCRIPT("d5++ (now 0x%x)\n", saved_d5);
+			LOG(("d5++ (now 0x%x)\n", saved_d5));
 			break;
 
 			case 0x75:
 			saved_d4--;
-			LOG_SCRIPT("d4-- (now 0x%x)\n", saved_d4);
+			LOG(("d4-- (now 0x%x)\n", saved_d4));
 			break;
 
 			case 0x76:
 			saved_d5--;               
-			LOG_SCRIPT("d5-- (now 0x%x)\n", saved_d5);
+			LOG(("d5-- (now 0x%x)\n", saved_d5));
 			break;
 
 			case 0x77:
 			var1 = next_pc();
 			imm8 = next_pc();
 			imm16 = get_variable(var1);
-			imm16 <<= imm8;   /* fixme: asl ? */
+			if (imm8 >= 16)
+			{
+				imm16 = 0;
+			}
+			else
+			{
+				imm16 = (short)(imm16 << imm8);
+			}
 			set_variable(var1, imm16);
 
-			LOG_SCRIPT("var[%d] asl %d\n", var1, imm8); 
+			LOG(("var[%d] asl %d\n", var1, imm8)); 
 			break;
 
 			case 0x78:
 			var1 = next_pc();
 			imm8 = next_pc();
 			
-			imm16 = get_variable(var1) / (1 << imm8);
+			if (imm8 >= 16)
+			{
+				imm16 = 0;
+			}
+			else
+			{
+				imm16 = get_variable(var1) / (1 << imm8);
+			}
 			set_variable(var1, imm16);
 
-			LOG_SCRIPT("asr %d var[%d] (now 0x%x)\n", imm8, var1, imm16);
+			LOG(("asr %d var[%d] (now 0x%x)\n", imm8, var1, imm16));
 			break;
 
 			case 0x7d:
 			imm16 = get_variable(next_pc());
 			imm16_2 = is_last_frame_in_animation(imm16);
 			set_variable(2, imm16_2);
-			LOG_SCRIPT("check if current frame exceeded frame count for sprite %d (%d)\n", imm16, imm16_2);
+			LOG(("check if current frame exceeded frame count for sprite %d (%d)\n", imm16, imm16_2));
 			break;
 
 			case 0x7e:
@@ -2508,7 +2583,7 @@ int decode(int current_task, int start_pc)
 			x = get_variable(next_pc());
 			move_sprite_by(imm16, x, 0);
 
-			LOG_SCRIPT("shift sprite %d delta_x=%d (%x)\n", imm16, x, x);
+			LOG(("shift sprite %d delta_x=%d (%x)\n", imm16, x, x));
 			break;
 
 			case 0x7f:
@@ -2518,22 +2593,22 @@ int decode(int current_task, int start_pc)
 			y = get_variable(next_pc());
 			move_sprite_by(imm16, 0, y);
 
-			LOG_SCRIPT("shift sprite %d delta_y=%d (%x)\n", imm16, y, y);
+			LOG(("shift sprite %d delta_y=%d (%x)\n", imm16, y, y));
 			break;
 
 			case 0x80:
 			toggle_aux(0);
-			LOG_SCRIPT("using_aux = 0\n");
+			LOG(("using_aux = 0\n"));
 			break;
 
 			case 0x81:
 			toggle_aux(1);
-			LOG_SCRIPT("using_aux = 1\n");
+			LOG(("using_aux = 1\n"));
 			break;
 
 			case 0x82:                
 			imm8 = next_pc();
-			LOG_SCRIPT("breakpoint %d\n", imm8);
+			LOG(("breakpoint %d\n", imm8));
 			break;
 
 			case 0x83:
@@ -2541,7 +2616,7 @@ int decode(int current_task, int start_pc)
 				int dst_index = next_pc();
 				int src_index = next_pc();
 				int count = next_pc();
-				LOG_SCRIPT("copy globalvar %d to tls-var %d, count %d\n", src_index, dst_index, count);
+				LOG(("copy globalvar %d to tls-var %d, count %d\n", src_index, dst_index, count));
 				copy_global_to_tls(dst_index, src_index, count);
 			}
 			break;
@@ -2551,7 +2626,7 @@ int decode(int current_task, int start_pc)
 				int dst_index = next_pc();
 				int src_index = next_pc();
 				int count = next_pc();
-				LOG_SCRIPT("copy tls-var %d into globalvar %d, count %d\n",  src_index, dst_index, count);
+				LOG(("copy tls-var %d into globalvar %d, count %d\n",  src_index, dst_index, count));
 				copy_tls_to_global(dst_index, src_index, count);
 			}
 			break;
@@ -2560,7 +2635,7 @@ int decode(int current_task, int start_pc)
 			var1 = next_pc();
 			imm16 = next_pc_word();
 			set_variable(var1, imm16);
-			LOG_SCRIPT("var[%d] = 0x%x\n", var1, imm16);
+			LOG(("var[%d] = 0x%x\n", var1, imm16));
 			break;
 
 			case 0x88:
@@ -2568,12 +2643,12 @@ int decode(int current_task, int start_pc)
 			var2 = next_pc();         
 			imm16 = get_variable(var1) + get_variable(var2)*2;
 			pc = get_word(script_ptr + imm16);
-			LOG_SCRIPT("indirect jump to 0x%x\n", pc);
+			LOG(("indirect jump to 0x%x\n", pc));
 			break; 
 
 			case 0x89:
 			op_89();
-			LOG_SCRIPT("\n");
+			LOG(("\n"));
 			break;
 	
 			case 0x8a:
@@ -2582,7 +2657,7 @@ int decode(int current_task, int start_pc)
 			var2 = next_pc(); // d2
 
 			imm16_2 = imm16 + get_variable(var2);
-			LOG_SCRIPT("read byte %d from array at 0x%x into var[%d] (%04x)\n", get_variable(var2), imm16, var1, extw(get_byte(script_ptr + imm16_2)));
+			LOG(("read byte %d from array at 0x%x into var[%d] (%04x)\n", get_variable(var2), imm16, var1, extw(get_byte(script_ptr + imm16_2))));
 			
 			set_variable(var1, extw(get_byte(script_ptr + imm16_2)));
 			break;
@@ -2592,12 +2667,12 @@ int decode(int current_task, int start_pc)
 			imm16 = get_variable(var1);
 			set_palette(imm16);
 	
-			LOG_SCRIPT("set palette var[%d] (%d)\n", var1, imm16);
+			LOG(("set palette var[%d] (%d)\n", var1, imm16));
 			break;
 
 			case 0x8c:
 			imm8 = next_pc();
-			LOG_SCRIPT("scroll reg = %d\n", extw(imm8));
+			LOG(("scroll reg = %d\n", extw(imm8)));
 			set_scroll(extw(imm8));
 			break;
 
@@ -2608,7 +2683,7 @@ int decode(int current_task, int start_pc)
 			*/
 
 			default:
-			LOG_SCRIPT("opcode 0x%x unknown\n", opcode);
+			LOG(("opcode 0x%x unknown\n", opcode));
 			panic("unknown!");
 			break;
 		}

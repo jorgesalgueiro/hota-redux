@@ -18,12 +18,14 @@
  */
 
 #include <memory.h>
+#include "debug.h"
 #include "vm.h"
 
 #define MAX_VARIABLES 256
+#define MEMORY_SIZE VM_MEMORY_SIZE
 
 short variables[MAX_VARIABLES];
-static unsigned char memory[512*1024*2]; 
+static unsigned char memory[MEMORY_SIZE]; 
 
 int auxptr;
 static int using_aux = 0;
@@ -31,6 +33,11 @@ short auxvars[MAX_TASKS*32];
 
 void set_aux_bank(int bank)
 {
+	if (bank < 0 || bank >= MAX_TASKS)
+	{
+		bank = 0;
+	}
+
 	auxptr = (bank * 32);
 }
 
@@ -40,6 +47,12 @@ void set_aux_bank(int bank)
 */
 unsigned char get_byte(int offset)
 {
+	if (offset < 0 || offset >= MEMORY_SIZE)
+	{
+		LOG(("get_byte: offset 0x%x out of range\n", offset));
+		return 0;
+	}
+
 	return memory[offset];
 }
 
@@ -51,6 +64,12 @@ unsigned char get_byte(int offset)
 */
 unsigned short get_word(int offset)
 {
+	if (offset < 0 || offset + 1 >= MEMORY_SIZE)
+	{
+		LOG(("get_word: offset 0x%x out of range\n", offset));
+		return 0;
+	}
+
 	return (get_byte(offset) << 8) | get_byte(offset + 1);
 }
 
@@ -62,7 +81,15 @@ unsigned short get_word(int offset)
 */
 unsigned long get_long(int offset)
 {
-	return (get_word(offset) << 16) | get_word(offset + 2);
+	if (offset < 0 || offset + 3 >= MEMORY_SIZE)
+	{
+		LOG(("get_long: offset 0x%x out of range\n", offset));
+		return 0;
+	}
+
+	/* cast before shifting: get_word() promotes to int, and shifting a
+	 * value with bit 15 set into bit 31 is undefined behaviour */
+	return ((unsigned long)get_word(offset) << 16) | get_word(offset + 2);
 }
 
 /** Gets variable either from global memory, or from auxiliry memory
@@ -76,7 +103,21 @@ short get_variable(int var)
 {
 	if (using_aux)
 	{
-		return auxvars[auxptr + var];
+		int index = auxptr + var;
+
+		if (var < 0 || var >= 32 || index < 0 || index >= MAX_TASKS*32)
+		{
+			LOG(("get_variable: aux index 0x%x out of range\n", var));
+			return 0;
+		}
+
+		return auxvars[index];
+	}
+
+	if (var < 0 || var >= MAX_VARIABLES)
+	{
+		LOG(("get_variable: index 0x%x out of range\n", var));
+		return 0;
 	}
 
 	return variables[var];
@@ -86,7 +127,21 @@ void set_variable(int var, short value)
 {
 	if (using_aux)
 	{
-		auxvars[auxptr + var] = value;
+		int index = auxptr + var;
+
+		if (var < 0 || var >= 32 || index < 0 || index >= MAX_TASKS*32)
+		{
+			LOG(("set_variable: aux index 0x%x out of range\n", var));
+			return;
+		}
+
+		auxvars[index] = value;
+		return;
+	}
+
+	if (var < 0 || var >= MAX_VARIABLES)
+	{
+		LOG(("set_variable: index 0x%x out of range\n", var));
 		return;
 	}
 
@@ -139,6 +194,17 @@ int toggle_aux(int toggle)
 */
 unsigned char *get_memory_ptr(int offset)
 {
+	if (offset < 0)
+	{
+		LOG(("get_memory_ptr: offset 0x%x out of range\n", offset));
+		offset = 0;
+	}
+	else if (offset > MEMORY_SIZE)
+	{
+		LOG(("get_memory_ptr: offset 0x%x out of range\n", offset));
+		offset = MEMORY_SIZE;
+	}
+
 	return (unsigned char *)memory + offset;
 }
 

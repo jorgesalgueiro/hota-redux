@@ -3,6 +3,9 @@
 
 #define MAX_TASKS 64
 
+/** Size of the virtual 68000 address space */
+#define VM_MEMORY_SIZE (512*1024*2)
+
 /** Gets variable either from global memory, or from auxiliry memory
     @param var   index in memory
 

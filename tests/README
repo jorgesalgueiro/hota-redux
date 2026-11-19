@@ -3,6 +3,18 @@ To try them out, rename such a file to "recorded-keys" and place it
 in the same directory as "Alien" executable, and run Alien with
 --replay, and --room with the room specified below.
 
+An automated smoke/regression suite is available as well:
+
+    powershell -ExecutionPolicy Bypass -File run-tests.ps1
+
+It runs headless (SDL dummy video/audio) against the Windows build.
+
+The key binding parser has a standalone test as well:
+
+    gcc -I<sdl3>/include keymap_probe.c ../src/keymap.c -L<sdl3>/lib -lSDL3 -o keymap_probe
+    ./keymap_probe
+    ./keymap_probe keys-sample.txt
+
 recorded-keys.level1 (room 1)
 recorded-keys.level2 (room 2)
 recorded-keys.boss (room 7, enter password to start at boss level)

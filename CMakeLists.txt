@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22...4.3 FATAL_ERROR)
 
-project(hota-redux VERSION 2.0.0 LANGUAGES C
+project(hota-redux VERSION 2.0.1 LANGUAGES C
 	DESCRIPTION "Heart of The Alien Redux"
 	HOMEPAGE_URL "")
 set(PROJECT_BUGREPORT "https://github.com/carstene1ns/hota-redux/issues")
@@ -20,7 +20,14 @@ set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeR
 find_package(SDL3 3.4 REQUIRED)
 find_package(SDL3_mixer REQUIRED)
 
-# main
+# OpenGL is only needed for the optional HD renderer; the game still
+# builds and runs (SDL renderer) when it is missing.
+set(HOTA_HAVE_OPENGL FALSE)
+find_package(OpenGL QUIET)
+if(OpenGL_FOUND)
+	set(HOTA_HAVE_OPENGL TRUE)
+endif()
+
 add_executable(alien
 	src/main.c
 	src/animation.c src/animation.h
@@ -31,32 +38,31 @@ add_executable(alien
 	src/decode.c src/decode.h
 	src/files.c src/files.h
 	src/game2bin.c src/game2bin.h
+	src/gl_render.c src/gl_render.h src/omniscale_shader.h
+	src/keymap.c src/keymap.h
 	src/lzss.c src/lzss.h
 	src/parg.c src/parg.h
 	src/render.c src/render.h
 	src/rooms.c src/rooms.h
 	src/screen.c src/screen.h
 	src/sprites.c src/sprites.h
+	src/upscale.c src/upscale.h
 	src/vm.c src/vm.h)
 target_compile_definitions(alien PRIVATE
 	$<$<CONFIG:Debug>:ENABLE_DEBUG> HOTA_VERSION="${PROJECT_VERSION}")
+if(HOTA_HAVE_OPENGL)
+	target_compile_definitions(alien PRIVATE HAVE_OPENGL)
+endif()
 target_compile_options(alien PRIVATE -Wall) # -Wextra
 
 target_link_libraries(alien PRIVATE SDL3::SDL3 SDL3_mixer::SDL3_mixer)
+if(HOTA_HAVE_OPENGL)
+	target_link_libraries(alien PRIVATE OpenGL::GL)
+endif()
 
 option(WANT_ASAN "build with address sanitizer" OFF)
 if(WANT_ASAN)
 	message(STATUS "Building with address sanitizer")
 	target_compile_options(alien PRIVATE -fno-omit-frame-pointer -fsanitize=address)
 	target_link_options(alien PRIVATE -fno-omit-frame-pointer -fsanitize=address)
-endif()
-
-# install
-if(UNIX)
-	include(GNUInstallDirs)
-	install(TARGETS alien DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-	install(FILES res/alien.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-	install(FILES res/icon48.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/48x48/apps RENAME alien.png)
-	install(FILES res/icon96.png DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/96x96/apps RENAME alien.png)
 endif()

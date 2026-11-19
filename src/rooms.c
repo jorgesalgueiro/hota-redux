@@ -21,6 +21,7 @@
 #include <assert.h>
 #include <string.h>
 #include "vm.h"
+#include "debug.h"
 #include "lzss.h"
 
 /* 'room' is the prefix given to data files on the iso9660. */
@@ -38,8 +39,9 @@ int unpack_room(void *out, int entry)
 
 	resources = get_long(0xf908);
 
-	if (entry >= get_word(resources))
+	if (entry < 0 || entry >= get_word(resources))
 	{
+		LOG(("unpack_room: entry %d out of range\n", entry));
 		return -1;
 	}
 

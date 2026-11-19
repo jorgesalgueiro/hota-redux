@@ -2,23 +2,30 @@
 /build/
 /build-*/
 
+# test scratch
+/tests/work/
+/tests/artifacts/
+
 # save game
 quicksave
-# key recording
-recorded-keys
+
+# runtime config and captures
+/keys.txt
+hota-screenshot.png
+
+# release artifact (attach the zip to a GitHub release instead)
+/hota-redux-*-win64.zip
 
 # game data
 *.iso
 *.cue
 *.bin
+/Heart Of The Alien (U)/
 
 *.BIN
 *.MAC
 *.MAT
 *.SND
 
-*.wav
-*.mp3
 *.ogg
-*.opus
-*.flac
+*.mp3

@@ -76,21 +76,54 @@ static int get_file_info(const char *filename, int *offset, int *size)
 	return -1;
 }
 
+/** Builds the ISO path from the configured prefix (or the default one)
+    @returns 0 on success, -1 if the path does not fit in the buffer
+*/
+static int get_iso_path(char *archive, size_t archive_size)
+{
+	const char *prefix;
+	int len;
+
+	prefix = (cls.iso_prefix != NULL) ? cls.iso_prefix : DEFAULT_ISO_PREFIX;
+	len = snprintf(archive, archive_size, "%s.iso", prefix);
+	if (len < 0 || (size_t)len >= archive_size)
+	{
+		LOG(("ISO path is too long: %s\n", prefix));
+		return -1;
+	}
+
+	return 0;
+}
+
+/** Returns non-zero if the prefix is a plain name (no directory part)
+*/
+static int is_plain_prefix(const char *prefix)
+{
+	return strchr(prefix, '/') == NULL && strchr(prefix, '\\') == NULL;
+}
+
 static int read_file_internal(const char *filename, int size, int offset, void *out)
 {
 	FILE *fp = fopen(filename, "rb");
 	if (fp == NULL)
 	{
-		LOG_FILE("read_file: error opening file %s\n", filename);
+		LOG(("read_file: error opening file %s\n", filename));
 		return -1;
 	}
 
-	fseek(fp, offset, SEEK_SET);
+	if (fseek(fp, offset, SEEK_SET) != 0)
+	{
+		fclose(fp);
+		LOG(("read_file: error seeking in file %s to offset 0x%x\n",
+			filename, offset));
+		return -1;
+	}
+
 	if (fread(out, size, 1, fp) != 1)
 	{
 		fclose(fp);
-		LOG_FILE("read_file: error reading file %s: %d bytes from offset 0x%x\n",
-			filename, size, offset);
+		LOG(("read_file: error reading file %s: %d bytes from offset 0x%x\n",
+			filename, size, offset));
 		return -1;
 	}
 
@@ -102,38 +135,62 @@ int read_file(const char *filename, void *out)
 {
 	/* get file info */
 	int size, offset;
+	char archive[512];
+	const char *prefix;
+
 	if (get_file_info(filename, &offset, &size) < 0)
 	{
 		/* not a known file */
-		LOG_FILE("read_file: %s not known\n", filename);
+		LOG(("read_file: %s not known\n", filename));
 		return -1;
 	}
 
-	if (cls.use_iso)
+	if (!cls.use_iso && access(filename, R_OK) == 0)
 	{
-		/* open iso image */
-		char archive[256];
-		if(cls.iso_prefix)
+		/* if loose file exists, prefer it */
+		LOG(("using %s file directly\n", filename));
+		if (read_file_internal(filename, size, 0, out) == 0)
 		{
-			strcpy(archive, cls.iso_prefix);
+			return 0;
 		}
-		else
-		{
-			strcpy(archive, DEFAULT_ISO_PREFIX);
-		}
-		strcat(archive, ".iso");
 
-		LOG_FILE("reading %s file from iso\n", filename);
-		return read_file_internal(archive, size, offset, out);
+		LOG(("loose %s file could not be read, trying ISO\n", filename));
 	}
-	else if(access(filename, R_OK) == 0)
+
+	/* Use the ISO (or fall back to it automatically when no loose files
+	 * are present, which is the layout of the distributed game data). */
+	if (get_iso_path(archive, sizeof(archive)) == 0)
 	{
-		/* if loose file exists */
-		LOG_FILE("using %s file directly\n", filename);
+		if (access(archive, R_OK) == 0)
+		{
+			LOG(("reading %s file from iso %s\n", filename, archive));
+			return read_file_internal(archive, size, offset, out);
+		}
+
+		/* Some distributions keep the ISO inside a folder named after
+		 * the prefix (e.g. "Heart Of The Alien (U)/....iso"). */
+		prefix = (cls.iso_prefix != NULL) ? cls.iso_prefix : DEFAULT_ISO_PREFIX;
+		if (is_plain_prefix(prefix))
+		{
+			int len = snprintf(archive, sizeof(archive), "%s/%s.iso",
+				prefix, prefix);
+			if (len > 0 && (size_t)len < sizeof(archive) &&
+				access(archive, R_OK) == 0)
+			{
+				LOG(("reading %s file from iso %s\n", filename, archive));
+				return read_file_internal(archive, size, offset, out);
+			}
+		}
+	}
+
+	/* Last resort: loose file even when --iso was requested. */
+	if (cls.use_iso && access(filename, R_OK) == 0)
+	{
+		LOG(("using %s file directly\n", filename));
 		return read_file_internal(filename, size, 0, out);
 	}
 
 	/* not found */
-	LOG_FILE("read_file: %s not found\n", filename);
+	LOG(("read_file: %s not found\n", filename));
 	return -1;
 }

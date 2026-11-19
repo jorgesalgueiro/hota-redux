@@ -33,13 +33,19 @@
 static MIX_Mixer *mixer;
 static MIX_Track *music;
 static MIX_Track *sounds[4];
+static int mixer_initialized = 0;
 
 /** Stops all 4 channels
 */
 static void stop_all_channels()
 {
 	for(int i = 0; i < 4; i++)
-		MIX_StopTrack(sounds[i], 0);
+	{
+		if (sounds[i] != NULL)
+		{
+			MIX_StopTrack(sounds[i], 0);
+		}
+	}
 }
 
 /** Start playing a sample
@@ -71,16 +77,36 @@ void play_sample(int index, int volume, int channel)
 		return;
 	}
 
+	if (channel < 0 || channel >= 4)
+	{
+		LOG(("play_sample: invalid channel %d\n", channel));
+		return;
+	}
+
+	if (mixer == NULL || sounds[channel] == NULL)
+	{
+		return;
+	}
+
 	index = index - 1;
-	LOG_AUDIO("playing sample %d, volume %d, channel %d\n", index, volume, channel);
+	LOG(("playing sample %d, volume %d, channel %d\n", index, volume, channel));
 
 	int sample_ptr = get_long(0xf90c);
 	int ptr = get_long(sample_ptr + index * 4);
 	int length = get_long(ptr);
 
+	if (length <= 0)
+	{
+		LOG(("play_sample: invalid sample length %d\n", length));
+		return;
+	}
+
+	if (volume < 0) volume = 0;
+	if (volume > 255) volume = 255;
+
 	/* length plus some unknown flags */
 	ptr = ptr + 8;
-	LOG_AUDIO("sample data starts at 0x%x, length is %d\n", ptr, length);
+	LOG(("sample data starts at 0x%x, length is %d\n", ptr, length));
 
 	/* convert from 8000 mono 8bit, to 44100 stereo 16bit */
 	char *buffer = SDL_malloc(length);
@@ -101,15 +127,22 @@ void play_sample(int index, int volume, int channel)
 		{
 			s = 0 - (u & 0x7f);
 		}
-		else if (u <= 0x80)
+		else
 		{
-			s = u;
+			s = (signed char)u;
 		}
 
 		*current_sample++ = s;
 	}
 
 	MIX_Audio *a = MIX_LoadRawAudioNoCopy(mixer, buffer, length, &spec, true);
+	if (a == NULL)
+	{
+		LOG(("play_sample: failed to load sample %d: %s\n", index, SDL_GetError()));
+		SDL_free(buffer);
+		return;
+	}
+
 	MIX_SetTrackAudio(sounds[channel], a);
 	MIX_SetTrackGain(sounds[channel], volume/255.0f);
 	MIX_PlayTrack(sounds[channel], 0);
@@ -121,12 +154,42 @@ void play_sample(int index, int volume, int channel)
 */
 int audio_init()
 {
-	MIX_Init();
+	if (!MIX_Init())
+	{
+		fprintf(stderr, "failed to initialize SDL_mixer: %s\n", SDL_GetError());
+		return -1;
+	}
+
+	mixer_initialized = 1;
 	mixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, NULL);
+	if (mixer == NULL)
+	{
+		fprintf(stderr, "failed to create audio mixer: %s\n", SDL_GetError());
+		MIX_Quit();
+		mixer_initialized = 0;
+		return -1;
+	}
 
 	music = MIX_CreateTrack(mixer);
 	for(int i = 0; i < 4; i++)
+	{
 		sounds[i] = MIX_CreateTrack(mixer);
+	}
+
+	if (music == NULL)
+	{
+		fprintf(stderr, "failed to create music track: %s\n", SDL_GetError());
+		return -1;
+	}
+
+	for (int i = 0; i < 4; i++)
+	{
+		if (sounds[i] == NULL)
+		{
+			fprintf(stderr, "failed to create sound track %d: %s\n", i, SDL_GetError());
+			return -1;
+		}
+	}
 
 	return 0;
 }
@@ -142,37 +205,97 @@ void sound_flush_cache()
 /** callback when game script has been unloaded */
 void audio_done()
 {
+	if (mixer_initialized == 0)
+	{
+		return;
+	}
+
 	sound_flush_cache();
+
 	for(int i = 0; i < 4; i++)
-		MIX_DestroyTrack(sounds[i]);
-	stop_music();
-	MIX_DestroyTrack(music);
-	MIX_DestroyMixer(mixer);
+	{
+		if (sounds[i] != NULL)
+		{
+			MIX_DestroyTrack(sounds[i]);
+			sounds[i] = NULL;
+		}
+	}
+
+	if (music != NULL)
+	{
+		MIX_StopTrack(music, 0);
+		MIX_DestroyTrack(music);
+		music = NULL;
+	}
+
+	if (mixer != NULL)
+	{
+		MIX_DestroyMixer(mixer);
+		mixer = NULL;
+	}
 
 	MIX_Quit();
+	mixer_initialized = 0;
 }
 
 /** Stops music */
 void stop_music()
 {
-	if (cls.nosound == 0)
+	if (cls.nosound == 0 && music != NULL)
 	{
-		if (music != NULL)
+		MIX_StopTrack(music, 100);
+	}
+}
+
+/** Builds a path to a music file, falling back to the directory layout used
+    by the distributed game data (prefix/prefix NN.ext).
+    @returns zero if a readable file was found
+*/
+static int find_music_file(char *filename, size_t filename_size,
+	const char *prefix, int track, const char *extension)
+{
+	int len;
+
+	len = snprintf(filename, filename_size, "%s %02d.%s",
+		prefix, track + 1, extension);
+	if (len < 0 || (size_t)len >= filename_size)
+	{
+		return -1;
+	}
+
+	if (access(filename, R_OK) == 0)
+	{
+		return 0;
+	}
+
+	if (strchr(prefix, '/') == NULL && strchr(prefix, '\\') == NULL)
+	{
+		len = snprintf(filename, filename_size, "%s/%s %02d.%s",
+			prefix, prefix, track + 1, extension);
+		if (len > 0 && (size_t)len < filename_size &&
+			access(filename, R_OK) == 0)
 		{
-			MIX_StopTrack(music, 100);
+			return 0;
 		}
 	}
+
+	return -1;
 }
 
 /** Plays audio track
     @param track   track to play
-    @param loop    loop count
+    @param loop    non-zero to loop forever, zero to play once
 */
 void play_music_track(int track, int loop)
 {
 	if (cls.nosound == 0)
 	{
-		char filename[256];
+		char filename[512];
+
+		if (mixer == NULL || music == NULL)
+		{
+			return;
+		}
 
 		stop_music();
 
@@ -191,39 +314,38 @@ void play_music_track(int track, int loop)
 		}
 
 		#define NUM_EXT 5
-		static int index = -1;
 		static const char* extensions[NUM_EXT] = { "wav", "mp3", "ogg", "opus", "flac" };
+		int found = 0;
 
-		if(index > -1)
+		/* search for valid music files */
+		for (int i = 0; i < NUM_EXT; i++)
 		{
-			/* shortcut if at least one music file was found earlier */
-			sprintf(filename, "%s %02d.%s", ptr, track + 1, extensions[index]);
-		}
-		else
-		{
-			/* search for valid music files */
-			for (int i = 0; i <= NUM_EXT; i++)
+			if (find_music_file(filename, sizeof(filename), ptr, track, extensions[i]) == 0)
 			{
-				sprintf(filename, "%s %02d.%s", ptr, track + 1, extensions[i]);
-				if (access(filename, R_OK) == 0)
-				{
-					index = i;
-					break;
-				}
-				else if (i == NUM_EXT - 1)
-				{
-					WARN("music %d not found!\n", track + 1);
-					return;
-				}
+				found = 1;
+				break;
 			}
 		}
 		#undef NUM_EXT
-		LOG_AUDIO("playing music %s\n", filename);
+
+		if (!found)
+		{
+			LOG(("music %d not found!\n", track + 1));
+			return;
+		}
+
+		LOG(("playing music %s\n", filename));
 
 		MIX_Audio *a = MIX_LoadAudio(mixer, filename, false);
+		if (a == NULL)
+		{
+			fprintf(stderr, "failed to load music %s: %s\n", filename, SDL_GetError());
+			return;
+		}
+
 		MIX_SetTrackAudio(music, a);
+		MIX_SetTrackLoops(music, loop ? -1 : 0);
 		MIX_PlayTrack(music, 0);
-		MIX_SetTrackLoops(music, -1);
 		MIX_DestroyAudio(a);
 	}
 }

@@ -23,6 +23,7 @@
 
 int render_init();
 int render_create_surface();
+void render_done();
 
 int get_scroll_register();
 void set_scroll(int scroll);
@@ -33,7 +34,12 @@ void set_palette(int which);
 void set_palette_rgb12(unsigned char *rgb12);
 
 void toggle_fullscreen();
+void toggle_upscale();
+void toggle_scaler();
 void toggle_filter();
+
+int render_set_upscale(int factor);
+int render_get_upscale();
 
 int get_current_palette();
 

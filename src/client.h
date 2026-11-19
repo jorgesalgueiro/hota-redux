@@ -24,19 +24,19 @@
 
 typedef struct
 {
-	bool paused; // FIXME: unused
-	bool quit;
-
-	bool speed_throttle;
+	int paused;
+	int quit;
 
 	int scale;
-	int filtered;
-	int fullscreen;
-
+	int upscale;
+	int smooth;
 	int nosound;
-
-	int joy_index;
-
+	int fullscreen;
+	int speed_throttle;
+	int filtered;
+	int hd;      /* render at native window resolution with OpenGL */
+	int hd_sharp; /* 1 = nearest shader, 0 = Omniscale in HD mode */
+	int hd_smooth; /* Omniscale strength 0-100 (100 = full smoothing) */
 	bool use_iso;
 	char *iso_prefix;
 	char *music_prefix;

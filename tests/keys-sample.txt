@@ -1,0 +1,7 @@
+# sample binding file used by tests/keymap_probe.c
+
+quicksave = ctrl+s
+quit = f10
+screenshot = f9
+move up = enter
+move down =

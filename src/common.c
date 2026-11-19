@@ -1,5 +1,5 @@
 /*
- * Heart of The Alien: Common/68000 opcodes
+ * Heart of The Alien: Common 68000 opcodes
  * Copyright (c) 2004 Gil Megidish
  *
  * This program is free software; you can redistribute it and/or modify
@@ -73,9 +73,19 @@ void fputw(unsigned short s, FILE *fp)
 
 unsigned short fgetw(FILE *fp)
 {
-	unsigned short s;
+	int hi, lo;
 
-	s = fgetc(fp);
-	s = (s << 8) | fgetc(fp);
-	return s;
+	hi = fgetc(fp);
+	if (hi == EOF)
+	{
+		return 0;
+	}
+
+	lo = fgetc(fp);
+	if (lo == EOF)
+	{
+		return (unsigned short)(hi << 8);
+	}
+
+	return (unsigned short)((hi << 8) | lo);
 }
