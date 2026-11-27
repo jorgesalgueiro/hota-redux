@@ -2018,8 +2018,10 @@ int decode(int current_task, int start_pc)
 					play_music_track(40, 0);
 					play_animation("END4.BIN", 0);
 
-					/* return to password selection */
-					next_script = 7;
+					/* Return to the password selection screen.
+					 * When passwords are skipped, start a new
+					 * game at the first level instead. */
+					next_script = skip_password_flag ? 1 : 7;
 					leave = 1;
 				}
 				else if (next_script == 9)
@@ -2028,10 +2030,10 @@ int decode(int current_task, int start_pc)
 					 * returns to the password selection screen.
 					 * When passwords are skipped, restart the
 					 * level that was being played instead. */
-					if (skip_password_flag &&
-						last_level >= 1 && last_level <= 8)
+					if (skip_password_flag)
 					{
-						next_script = last_level;
+						next_script = (last_level >= 1 &&
+							last_level <= 8) ? last_level : 1;
 					}
 					else
 					{

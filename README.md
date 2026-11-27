@@ -88,9 +88,9 @@ Alien* itself remains the work of its original creators — see
 - **Unicode paths.** On Windows the ISO, music tracks and key file can live
   in folders with accents or any other non-ASCII characters.
 - **No password needed.** After the intro the game starts level 1 directly,
-  and after a game over Start restarts the level you were playing. The
-  original code-entry screen is still available with `--no-skip-password`
-  or from the setup screen.
+  after a game over Start restarts the level you were playing, and after the
+  endings a new game starts at level 1. The original code-entry screen is
+  still available with `--no-skip-password` or from the setup screen.
 - **Gamepad support.** Hot-plugged SDL3 controllers work out of the box
   (D-pad/stick, A/B/C, Start, quicksave/quickload shoulders).
 - **Volume and mute.** Set music/SFX levels with `--music-volume` and
@@ -249,8 +249,8 @@ next to the game. Delete that file to return to automatic sizing. An explicit
 | Flag | What it does |
 | --- | --- |
 | `--fastest` | Disable the speed throttle (mainly for tests and recording playback). |
-| `--skip-password` | After the intro, start level 1 directly instead of showing the code-entry screen; after a game over, Start restarts the level you were playing. **Default.** |
-| `--no-skip-password` | Show the original code-entry/level-select screen after the intro and after a game over. |
+| `--skip-password` | After the intro, start level 1 directly; after a game over, Start restarts the level you were playing; after the endings, start level 1. **Default.** |
+| `--no-skip-password` | Show the original code-entry/level-select screen after the intro, after a game over and after the endings. |
 | `--music-volume n` | Music volume, `0`–`100` (default `100`). |
 | `--sfx-volume n` | Sound-effect volume, `0`–`100` (default `100`). |
 | `--no-sound` | Disable music and sound effects entirely. |
@@ -486,6 +486,12 @@ included in this repository.
 - *Another World* by Éric Chahi: <https://www.anotherworld.fr/>
 
 ## Changelog
+
+### Unreleased
+
+- Changed: with **Skip password** on, the code-entry screen is now also
+  bypassed after the endings (a new game starts at level 1), and the
+  game-over fallback never returns to code entry
 
 ### 2.0.5.1
 
