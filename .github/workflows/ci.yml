@@ -19,7 +19,9 @@ jobs:
             libx11-dev libxext-dev libxrender-dev libxrandr-dev libxi-dev \
             libxcursor-dev libxfixes-dev libxss-dev libwayland-dev \
             libxkbcommon-dev libegl1-mesa-dev libgles2-mesa-dev \
-            libdrm-dev libgbm-dev libasound2-dev libudev-dev
+            libdrm-dev libgbm-dev libasound2-dev libudev-dev \
+            libxtst-dev libxinerama-dev libxdamage-dev libxcomposite-dev \
+            libxkbcommon-x11-dev libdecor-0-dev libdbus-1-dev
 
       - name: Cache SDL
         uses: actions/cache@v4
@@ -105,7 +107,9 @@ jobs:
             libx11-dev libxext-dev libxrender-dev libxrandr-dev libxi-dev \
             libxcursor-dev libxfixes-dev libxss-dev libwayland-dev \
             libxkbcommon-dev libegl1-mesa-dev libgles2-mesa-dev \
-            libdrm-dev libgbm-dev libasound2-dev libudev-dev
+            libdrm-dev libgbm-dev libasound2-dev libudev-dev \
+            libxtst-dev libxinerama-dev libxdamage-dev libxcomposite-dev \
+            libxkbcommon-x11-dev libdecor-0-dev libdbus-1-dev
 
       - name: Cache SDL
         uses: actions/cache@v4
