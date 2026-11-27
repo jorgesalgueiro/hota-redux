@@ -1,5 +1,5 @@
 # =====================================================================
-#  Heart of The Alien Redux 2.0.5.1 - setup / configuration screen
+#  Heart of The Alien Redux - setup / configuration screen
 #
 #  A small BIOS/DOS-style menu for the Windows launcher. It shows the
 #  current options next to their defaults, lets the player change them
@@ -21,6 +21,13 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $root
+
+$version = try {
+    (Get-Content -LiteralPath (Join-Path $root 'VERSION') -ErrorAction Stop |
+        Select-Object -First 1).Trim()
+} catch {
+    'unknown'
+}
 
 $cfgPath = Join-Path $root 'play.cfg'
 
@@ -560,7 +567,7 @@ function Show-Menu {
     Clear-Host
 
     Write-Host $line -ForegroundColor DarkCyan
-    Write-Host ('| {0,-76} |' -f ' HEART OF THE ALIEN REDUX 2.0.5.1  -  SETUP / CONFIGURATION') -ForegroundColor White
+    Write-Host ('| {0,-76} |' -f (' HEART OF THE ALIEN REDUX ' + $version + '  -  SETUP / CONFIGURATION')) -ForegroundColor White
     Write-Host $line -ForegroundColor DarkCyan
 
     Write-Host ('  {0,-2} {1,-26} {2,-21} {3,-21}' -f '', 'OPTION', 'CURRENT', 'DEFAULT') -ForegroundColor DarkGray

@@ -1,5 +1,7 @@
 # Heart of The Alien Redux 2.0.5.1
 
+[![CI](https://github.com/jorgesalgueiro/hota-redux/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgesalgueiro/hota-redux/actions/workflows/ci.yml)
+
 [![shot1](res/thumb1.png)](res/shot1.png)
 [![shot2](res/thumb2.png)](res/shot2.png)
 
@@ -255,6 +257,7 @@ next to the game. Delete that file to return to automatic sizing. An explicit
 | `--sfx-volume n` | Sound-effect volume, `0`–`100` (default `100`). |
 | `--no-sound` | Disable music and sound effects entirely. |
 | `--help` | Print the option list and exit. |
+| `--version` | Print the version from `VERSION` and exit. |
 
 ### Developer and test flags
 
@@ -263,6 +266,7 @@ next to the game. Delete that file to return to automatic sizing. An explicit
 | `--debug` | Verbose debug output (works in release builds too). |
 | `--intro-test` | Play every animation and exit when done. |
 | `--sprite-test` | Show the sprites of the current room (combine with `--room`). |
+| `--frames n` | Run exactly `n` rendered frames, then exit (deterministic tests). |
 
 ## Keys
 
@@ -343,6 +347,9 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
+The version is read from the `VERSION` file in the repository root, so it
+only has to be changed in one place. `alien --version` prints it.
+
 SDL3 and SDL3_mixer are needed (pkg-config, CMake packages or `CMAKE_PREFIX_PATH`).
 OpenGL is optional and only used by the HD renderer; without it the game builds
 and falls back to the plain SDL renderer automatically.
@@ -360,12 +367,39 @@ cmake --build build
 Ubuntu 24.04 does not ship SDL3 3.4 in its default repositories, so building
 SDL3 and SDL3_mixer from source into a local prefix is a good fallback.
 
+### Packaging
+
+After building, CPack produces a release archive for the current platform:
+
+```
+cmake --build build --target package
+```
+
+The result is `hota-redux-<version>-win64.zip` on Windows or
+`hota-redux-<version>-linux-x86_64.tar.gz` on Linux, together with a
+`.sha256` checksum. The packages include the required SDL libraries,
+`VERSION`, `THIRD_PARTY_NOTICES.md` and the `LICENSES/` directory.
+
 The Windows release in this repository is built with MinGW-w64 gcc 16.2,
-CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged with
-`play.bat`, `play.ps1`, `alien.exe`, `SDL3.dll`, `SDL3_mixer.dll`, `README.md`,
-`COPYING` and `AUTHORS.md` in a single flat zip.
+CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged as a single flat
+zip with the executable, both DLLs, the launchers, docs and licenses.
 
 ## Tests
+
+Run the platform-independent checks with CTest:
+
+```
+ctest --test-dir build --output-on-failure
+```
+
+This covers `--version`, `--help`, key-file parsing and the keymap probe. The
+full suites also need game data; point CMake at the directory containing
+`Heart Of The Alien (U).iso` when configuring to add them:
+
+```
+cmake -B build -DHOTA_TEST_DATA_DIR="/path/to/game/data"
+ctest --test-dir build --output-on-failure
+```
 
 - `tests/run-tests.ps1` - headless Windows suite: 45 checks covering option
   validation, the intro, every room, every upscaler, both renderers, the key
@@ -375,6 +409,10 @@ CMake 4.5 and SDL3 3.4.20 / SDL3_mixer 3.2.4, then packaged with
   same ground plus UTF-8 paths and both launchers.
 - `tests/run-asan.sh` — the same idea under AddressSanitizer and UBSan in WSL,
   using the `dummy` SDL video and audio drivers.
+
+The recorded game-over checks use `--frames 30000` (configurable with
+`-GameOverFrames` / `GAME_OVER_FRAMES`) so they finish deterministically
+instead of racing a wall-clock timeout.
 
 ## Reporting bugs
 
@@ -472,9 +510,11 @@ one has been checked and confirmed faulty on the real hardware as well:
 
 The engine is free software under the **GNU General Public License v2.0 or
 later**; see `COPYING`. The Omniscale shader is MIT licensed, with its license
-text kept in `src/omniscale_shader.h`. The game itself, its graphics, music and
-story are © their original owners and are **not** covered by this license or
-included in this repository.
+text kept in `src/omniscale_shader.h` and `LICENSES/Omniscale.txt`. SDL3 and
+SDL3_mixer are zlib licensed; their notices are in `LICENSES/` and
+`THIRD_PARTY_NOTICES.md`. The game itself, its graphics, music and story are
+© their original owners and are **not** covered by this license or included in
+this repository.
 
 ## Links
 
@@ -492,6 +532,15 @@ included in this repository.
 - Changed: with **Skip password** on, the code-entry screen is now also
   bypassed after the endings (a new game starts at level 1), and the
   game-over fallback never returns to code entry
+- Added: `--version`, backed by a single `VERSION` file used by CMake and
+  both launchers
+- Added: `--frames n` for deterministic headless runs; the game-over
+  regression checks now use it instead of wall-clock timeouts
+- Added: CTest integration and a GitHub Actions CI workflow for Linux,
+  Windows and ASan/UBSan builds
+- Added: CPack packaging with `.sha256` checksums, `VERSION`, third-party
+  notices and `LICENSES/` (SDL3, SDL3_mixer, Omniscale)
+- Added: Linux package desktop file and icons
 
 ### 2.0.5.1
 

@@ -14,7 +14,7 @@ param(
     [string]$Exe = (Join-Path $PSScriptRoot '..\build\alien.exe'),
     [string]$DataDir = (Join-Path $PSScriptRoot '..\Heart Of The Alien (U)'),
     [int]$ReplaySeconds = 8,
-    [int]$GameOverSeconds = 30,
+    [int]$GameOverFrames = 30000,
     [int]$IdleSeconds = 2
 )
 
@@ -346,8 +346,8 @@ foreach ($replay in $replays) {
 Check 'game over restarts the level' {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'recorded-keys.gameover-start') -Destination (Join-Path $work 'recorded-keys') -Force
 
-    $r = Invoke-Game @('--iso', '--room', '1', '--replay', '--fastest', '--no-sound', '--debug') $GameOverSeconds
-    if ($r.Exited) { throw "exited early (code $($r.ExitCode))" }
+    $r = Invoke-Game @('--iso', '--room', '1', '--replay', '--fastest', '--no-sound', '--debug', '--frames', "$GameOverFrames") 180
+    if (-not $r.Exited) { throw "did not finish after $GameOverFrames frames" }
     $loads = [regex]::Matches($r.StdOut, 'loading room (\d+)') | ForEach-Object { $_.Groups[1].Value }
     if (($loads -join ',') -notmatch '^1(,\d+)*,1$') { throw "level was not restarted (rooms: $($loads -join ','))" }
     Assert-NoPanic $r
@@ -356,8 +356,8 @@ Check 'game over restarts the level' {
 Check 'game over shows the password screen with --no-skip-password' {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'recorded-keys.gameover-start') -Destination (Join-Path $work 'recorded-keys') -Force
 
-    $r = Invoke-Game @('--iso', '--room', '1', '--replay', '--fastest', '--no-sound', '--debug', '--no-skip-password') $GameOverSeconds
-    if ($r.Exited) { throw "exited early (code $($r.ExitCode))" }
+    $r = Invoke-Game @('--iso', '--room', '1', '--replay', '--fastest', '--no-sound', '--debug', '--no-skip-password', '--frames', "$GameOverFrames") 180
+    if (-not $r.Exited) { throw "did not finish after $GameOverFrames frames" }
     if ($r.StdOut -notmatch 'loading room 7') { throw 'password screen was not loaded' }
     Assert-NoPanic $r
 }

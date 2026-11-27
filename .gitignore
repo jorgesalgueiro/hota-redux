@@ -2,6 +2,12 @@
 /build/
 /build-*/
 
+# local audit/scratch output
+/audit-build/
+/out.log
+__pycache__/
+*.pyc
+
 # test scratch
 /tests/work/
 /tests/artifacts/
@@ -15,8 +21,10 @@ quicksave
 /video.cfg
 hota-screenshot.png
 
-# release artifact (attach the zip to a GitHub release instead)
+# release artifacts (attach these to a GitHub release instead)
 /hota-redux-*-win64.zip
+/hota-redux-*-linux-x86_64.tar.gz
+/hota-redux-*.sha256
 
 # game data - never commit these (copyrighted)
 *.iso

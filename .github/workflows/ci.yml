@@ -1,0 +1,135 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: Linux (Release)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SDL
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sdl-prefix
+          key: sdl-3.4.20-3.2.4-linux
+
+      - name: Build SDL3 and SDL3_mixer
+        env:
+          PREFIX: ${{ runner.temp }}/sdl-prefix
+        run: |
+          set -euo pipefail
+          if [ ! -f "$PREFIX/lib/cmake/SDL3/SDL3Config.cmake" ]; then
+            curl -L -o sdl.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-3.4.20/SDL3-3.4.20.tar.gz
+            curl -L -o mixer.tar.gz https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz
+            tar xzf sdl.tar.gz
+            tar xzf mixer.tar.gz
+            cmake -S SDL3-3.4.20 -B sdl-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+              -DSDL_SHARED=ON -DSDL_STATIC=OFF \
+              -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+            cmake --build sdl-build
+            cmake --install sdl-build
+            cmake -S SDL3_mixer-3.2.4 -B mixer-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+              -DCMAKE_PREFIX_PATH="$PREFIX" \
+              -DSDL3MIXER_TESTS=OFF -DSDL3MIXER_EXAMPLES=OFF
+            cmake --build mixer-build
+            cmake --install mixer-build
+          fi
+          echo "SDL_PREFIX=$PREFIX" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$SDL_PREFIX"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  windows:
+    name: Windows (MinGW, Release)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-sdl3
+            mingw-w64-x86_64-sdl3-mixer
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+
+  sanitizers:
+    name: Linux (ASan + UBSan)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache SDL
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/sdl-prefix
+          key: sdl-3.4.20-3.2.4-sanitizers
+
+      - name: Build SDL3 and SDL3_mixer
+        env:
+          PREFIX: ${{ runner.temp }}/sdl-prefix
+        run: |
+          set -euo pipefail
+          if [ ! -f "$PREFIX/lib/cmake/SDL3/SDL3Config.cmake" ]; then
+            curl -L -o sdl.tar.gz https://github.com/libsdl-org/SDL/releases/download/release-3.4.20/SDL3-3.4.20.tar.gz
+            curl -L -o mixer.tar.gz https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz
+            tar xzf sdl.tar.gz
+            tar xzf mixer.tar.gz
+            cmake -S SDL3-3.4.20 -B sdl-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+              -DSDL_SHARED=ON -DSDL_STATIC=OFF \
+              -DSDL_TESTS=OFF -DSDL_EXAMPLES=OFF
+            cmake --build sdl-build
+            cmake --install sdl-build
+            cmake -S SDL3_mixer-3.2.4 -B mixer-build \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+              -DCMAKE_PREFIX_PATH="$PREFIX" \
+              -DSDL3MIXER_TESTS=OFF -DSDL3MIXER_EXAMPLES=OFF
+            cmake --build mixer-build
+            cmake --install mixer-build
+          fi
+          echo "SDL_PREFIX=$PREFIX" >> "$GITHUB_ENV"
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DWANT_ASAN=ON -DCMAKE_PREFIX_PATH="$SDL_PREFIX"
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build --output-on-failure

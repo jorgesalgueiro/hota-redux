@@ -83,6 +83,9 @@ int replay_flag = 0;
 int fullscreen_flag = 0;
 int fastest_flag = 0;
 int check_keys_flag = 0;
+int version_flag = 0;
+int frames_limit = -1;
+static long frames_done = 0;
 int skip_password_flag = 1;
 int integer_scale_flag = -1; /* -1 = use video.cfg, 0/1 = command line */
 int last_level = 0; /* last playable room, for restarting after game over */
@@ -1089,6 +1092,15 @@ void check_events()
 
 void rest(int fps)
 {
+	if (frames_limit > 0 && fps > 0)
+	{
+		frames_done++;
+		if (frames_done >= frames_limit)
+		{
+			cls.quit = 1;
+		}
+	}
+
 	if (fastest_flag == 0)
 	{
 		/* only set reference */
@@ -1488,6 +1500,8 @@ static void help()
 	puts("\t--fastest      speed throttle");
 	puts("\t--record       record keys");
 	puts("\t--replay       replay keys");
+	puts("\t--frames n     run <n> rendered frames, then exit (for tests)");
+	puts("\t--version      print the version and exit");
 	puts("\t--help         this help");
 }
 
@@ -1510,6 +1524,8 @@ static struct parg_option options[] =
 	{"fullscreen", PARG_NOARG, &fullscreen_flag, 1},
 	{"record", PARG_NOARG, &record_flag, 1},
 	{"replay", PARG_NOARG, &replay_flag, 1},
+	{"frames", PARG_REQARG, NULL, 'F'},
+	{"version", PARG_NOARG, &version_flag, 1},
 	{"scale", PARG_REQARG, NULL, 's'},
 	{"upscale", PARG_REQARG, NULL, 'u'},
 	{"smooth", PARG_NOARG, &cls.smooth, 1},
@@ -1618,7 +1634,7 @@ int main(int argc, char **argv)
 	struct parg_state ps;
 	parg_init(&ps);
 	int c;
-	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:k:S:M:V:", options, NULL)) != -1)
+	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:k:S:M:V:F:", options, NULL)) != -1)
 	{
 		switch(c)
 		{
@@ -1703,6 +1719,14 @@ int main(int argc, char **argv)
 			}
 			break;
 
+			case 'F':
+			if (parse_int(ps.optarg, &frames_limit) < 0 || frames_limit <= 0)
+			{
+				fprintf(stderr, "invalid frame count '%s' (must be greater than 0)\n", ps.optarg);
+				return 1;
+			}
+			break;
+
 			case 'i':
 			cls.use_iso = true;
 			/* manually check for optional argument as next arg */
@@ -1730,6 +1754,12 @@ int main(int argc, char **argv)
 			panic("invalid argument");
 			return 1;
 		}
+	}
+
+	if (version_flag)
+	{
+		printf("%s\n", HOTA_VERSION);
+		return 0;
 	}
 
 	if (replay_flag && record_flag)
