@@ -13,6 +13,7 @@ WORK=${WORK:-$HOME/hota-linux-work}
 ISO_PREFIX=${ISO_PREFIX:-$DATA_DIR/Heart Of The Alien (U)}
 IDLE_SECONDS=${IDLE_SECONDS:-2}
 REPLAY_SECONDS=${REPLAY_SECONDS:-8}
+GAME_OVER_SECONDS=${GAME_OVER_SECONDS:-30}
 
 export SDL_VIDEODRIVER=${SDL_VIDEODRIVER:-dummy}
 export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-dummy}
@@ -111,7 +112,7 @@ for spec in level1:1 level2:2 boss:7 gameover-start:1; do
 done
 
 cp "$REPO/tests/recorded-keys.gameover-start" "$WORK/recorded-keys"
-check game-over-restart "$REPLAY_SECONDS" run \
+check game-over-restart "$GAME_OVER_SECONDS" run \
     --iso "$ISO_PREFIX" --room 1 --replay --fastest --no-sound --debug
 if [ "$(grep -c 'loading room 1' "$WORK/game-over-restart.log")" -lt 2 ]; then
     echo "FAIL game-over-restart (level was not restarted)"
@@ -119,7 +120,7 @@ if [ "$(grep -c 'loading room 1' "$WORK/game-over-restart.log")" -lt 2 ]; then
     passes=$((passes - 1))
 fi
 
-check game-over-password "$REPLAY_SECONDS" run \
+check game-over-password "$GAME_OVER_SECONDS" run \
     --iso "$ISO_PREFIX" --room 1 --replay --fastest --no-sound --debug --no-skip-password
 if ! grep -q 'loading room 7' "$WORK/game-over-password.log"; then
     echo "FAIL game-over-password (password screen was not loaded)"

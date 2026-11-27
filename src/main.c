@@ -583,6 +583,18 @@ void quickload()
 		new_task_pc[i] = fgetw(fp);
 		enabled_tasks[i] = fgetw(fp);
 		new_enabled_tasks[i] = fgetw(fp);
+
+		/* A corrupt save must not send the interpreter outside the
+		 * script/memory space, where it would spin forever. */
+		if (task_pc[i] < INVALID_PC || task_pc[i] >= VM_MEMORY_SIZE)
+		{
+			task_pc[i] = INVALID_PC;
+		}
+
+		if (new_task_pc[i] < -2 || new_task_pc[i] >= VM_MEMORY_SIZE)
+		{
+			new_task_pc[i] = INVALID_PC;
+		}
 	}
 
 	quickload_sprites(fp);
@@ -1803,7 +1815,12 @@ int main(int argc, char **argv)
 
 	if (record_fp != NULL)
 	{
-		flush_recorded_keys();
+		/* the file is only writable in record mode; replay opens it
+		 * read-only */
+		if (record_flag)
+		{
+			flush_recorded_keys();
+		}
 		fclose(record_fp);
 	}
 

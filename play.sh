@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # =====================================================================
-#  Heart of The Alien Redux 2.0.5 - Unix launcher
+#  Heart of The Alien Redux 2.0.5.1 - Unix launcher
 #
 #  Opens the cross-platform setup screen (play.py). Extra arguments
 #  start the game immediately:

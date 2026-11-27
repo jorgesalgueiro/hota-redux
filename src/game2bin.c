@@ -34,9 +34,14 @@ static char game2bin[GAME2BIN_SIZE];
 */
 int copy_from_game2bin(void *dst, int offset, int length)
 {
+	if (length < 0)
+	{
+		return 0;
+	}
+
 	if (offset >= 0 && offset < GAME2BIN_SIZE)
 	{
-		if (offset + length > GAME2BIN_SIZE)
+		if (length > GAME2BIN_SIZE - offset)
 		{
 			length = GAME2BIN_SIZE - offset;
 		}

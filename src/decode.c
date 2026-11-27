@@ -2275,13 +2275,15 @@ int decode(int current_task, int start_pc)
 			case 0x3e:
 			imm8 = next_pc() & 31;
 			LOG(("d4 <<= %d\n", imm8));
-			saved_d4 <<= imm8;
+			/* shift as an unsigned value: shifting a negative
+			 * signed value is undefined behaviour in C */
+			saved_d4 = (short)((unsigned int)(unsigned short)saved_d4 << imm8);
 			break;
 
 			case 0x3f:
 			imm8 = next_pc() & 31;
 			LOG(("d5 <<= %d\n", imm8));
-			saved_d5 <<= imm8;
+			saved_d5 = (short)((unsigned int)(unsigned short)saved_d5 << imm8);
 			break;
 	
 			case 0x40:

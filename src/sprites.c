@@ -401,6 +401,16 @@ int quickload_sprites(FILE *fp)
 	first_sprite = fgetc(fp);
  	sprite_count = fgetc(fp);
 	last_sprite = fgetc(fp);
+
+	if (first_sprite < 0 || first_sprite >= MAX_SPRITES ||
+		last_sprite < 0 || last_sprite >= MAX_SPRITES ||
+		sprite_count < 0 || sprite_count >= MAX_SPRITES)
+	{
+		LOG(("quickload_sprites: invalid sprite list (first=%d, last=%d, count=%d)\n",
+			first_sprite, last_sprite, sprite_count));
+		reset_sprite_list();
+	}
+
 	return 0;
 }
 

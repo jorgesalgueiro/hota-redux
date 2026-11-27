@@ -139,6 +139,14 @@ void copy_screen(int dest, int src)
 	dest_surface = get_screen_ptr(masked_dest);
 
 	LOG(("copying surface %p onto %p\n", (void *)src_surface, (void *)dest_surface));
+
+	/* screens[1] and screens[2] are the same buffer; memcpy() with
+	 * identical source and destination is undefined behaviour */
+	if (src_surface == dest_surface)
+	{
+		return;
+	}
+
 	memcpy(dest_surface, src_surface, 304*192);
 }
 

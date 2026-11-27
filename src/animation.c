@@ -288,6 +288,11 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			 * where each line supplies deltax and delta-count
 			 */
 			loc_d308:
+			if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+			{
+				goto loc_d36e;
+			}
+
 			offset = get_word(a1);
 			a1 += 2;     	
 			count = get_byte(a1++);
@@ -301,6 +306,13 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			fillline(out, offset, count, color); 
 		
 			loc_d324:
+			if (a2 < 0 || a2 >= VM_MEMORY_SIZE ||
+				a3 < 0 || a3 >= VM_MEMORY_SIZE)
+			{
+				/* corrupt frame data: no end marker */
+				goto loc_d36e;
+			}
+
 			if (get_byte(a2) == 9 && get_byte(a3) == 9)
 			{
 				a2++;
@@ -331,6 +343,11 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 		{
 			while (1)
 			{
+				if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+				{
+					break;
+				}
+
 				/* block */
 				offset = get_byte(a1++);
 				if (offset == 0xff)
@@ -362,6 +379,11 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			/* horizontal line */
 			while (1)
 			{
+				if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+				{
+					break;
+				}
+
 				offset = get_byte(a1++);
 				if (offset == 0xff)
 				{
@@ -381,6 +403,11 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			/* vertical line */
 			while (1)
 			{
+				if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+				{
+					break;
+				}
+
 				offset = get_byte(a1++);
 				if (offset == 0xff)
 				{
@@ -407,6 +434,11 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			while (1)
 			{
 				int cnt;
+
+				if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+				{
+					break;
+				}
 
 				offset = get_byte(a1++);
 				if (offset == 0xff)
@@ -451,7 +483,12 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			{	
 				/* 4x4 pattern (16 bits) */
 				int cnt;
-	
+
+				if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+				{
+					break;
+				}
+
 				offset = get_byte(a1++);
 				if (offset == 0xff)
 				{
@@ -487,6 +524,11 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			while (1)
 			{
 				int cnt;
+
+				if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+				{
+					break;
+				}
 
 				/* 3x3 pattern (8 bits, center always set) */
 				offset = get_byte(a1++);
@@ -530,6 +572,11 @@ static void anim_interesting(int a1, int a2, int a3, unsigned short color_mask)
 			/* collection of pixels */
 			while (1)
 			{
+				if (a1 < 0 || a1 >= VM_MEMORY_SIZE)
+				{
+					break;
+				}
+
 				offset = get_byte(a1++);
 				if (offset == 0xff)
 				{
@@ -596,6 +643,12 @@ int play_sequence(int offset, int fps)
 {
 	int d0, d1, d3, d4, d6, d7;
 	int a0, a1, a2, a3, a4, a5;
+
+	if (offset < 0 || offset > VM_MEMORY_SIZE - 16)
+	{
+		LOG(("play_sequence: invalid offset 0x%x\n", offset));
+		return -1;
+	}
 
 	rest(0);
 
@@ -955,6 +1008,14 @@ int play_animation(const char *filename, int fileoffset)
 		}
 
 		scene_offset = get_long(0x80a6 + (pattern << 2));
+		if (scene_offset < 0 || scene_offset > VM_MEMORY_SIZE - 16)
+		{
+			LOG(("play_animation: invalid scene %d offset 0x%x\n",
+				pattern, scene_offset));
+			stop = -1;
+			break;
+		}
+
 		stop = play_sequence(scene_offset, fps_);
 
 		pattern++;

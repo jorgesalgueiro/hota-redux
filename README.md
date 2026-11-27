@@ -1,4 +1,4 @@
-# Heart of The Alien Redux 2.0.5
+# Heart of The Alien Redux 2.0.5.1
 
 [![shot1](res/thumb1.png)](res/shot1.png)
 [![shot2](res/thumb2.png)](res/shot2.png)
@@ -16,7 +16,8 @@ input precision, skipped the password screen by default, fixed the game-over
 Start path and hardened the decoders. **2.0.4** added gamepad support, volume
 and mute, pause on focus loss, a cross-platform launcher, integer scaling and
 remembered window size. **2.0.5** skips the password screen after a game over
-and restarts the level you were playing. 
+and restarts the level you were playing. **2.0.5.1** is a bug-fix release for
+animation decoding, quicksave validation and a few undefined-behaviour paths.
 It was made with the help of **opencode** and **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
@@ -39,7 +40,7 @@ PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
 to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
 I faced some problems, so I started fixing and polishing. One thing led to
-another, and this 2.0.1 / 2.0.5 fork is the result: the same game and the same
+another, and this 2.0.1 / 2.0.5.1 fork is the result: the same game and the same
 Redux engine, with a sharper picture, a documented key binding file, and some
 crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
@@ -129,7 +130,7 @@ Alien* itself remains the work of its original creators — see
 
 ### The easy way (Windows release zip)
 
-1. Unpack `hota-redux-2.0.5-win64.zip` into a folder of your choice.
+1. Unpack `hota-redux-2.0.5.1-win64.zip` into a folder of your choice.
 2. Put your game data next to `alien.exe`, keeping the original names:
 
    ```
@@ -450,7 +451,7 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Lior Halphon** — author of the **Omniscale** pixel-art shader (MIT), and
   **hunterk** for the RetroArch GLSL port used in `src/omniscale_shader.h`.
 
-### This 2.0.1 / 2.0.5 fork
+### This 2.0.1 / 2.0.5.1 fork
 
 - **Jorge Salgueiro** — SDL3/OpenGL HD renderer, adjustable Omniscale
   smoothing, key binding system, renderer/screenshot fixes, the bug fixes
@@ -485,6 +486,20 @@ included in this repository.
 - *Another World* by Éric Chahi: <https://www.anotherworld.fr/>
 
 ## Changelog
+
+### 2.0.5.1
+
+- Fixed: shifting a negative value in the script interpreter (`d4`/`d5`
+  left-shift opcodes) invoked undefined behaviour
+- Fixed: corrupt animation frames could loop forever past the end of VM
+  memory; animation and scene offsets are now validated
+- Fixed: a corrupt quicksave could send the script interpreter outside
+  memory or restore an invalid sprite list
+- Fixed: replay mode tried to flush the read-only recorded-keys file at exit
+- Fixed: copying a screen onto itself used `memcpy()` with identical
+  pointers (undefined behaviour)
+- Fixed: `copy_from_game2bin()` now rejects negative lengths
+- Tests: 45 checks on Windows and 39 on Linux (Ubuntu 24.04)
 
 ### 2.0.5
 
