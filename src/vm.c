@@ -222,7 +222,7 @@ unsigned char *get_memory_ptr(int offset)
 
 /** Resets VM, zeros all variables and aux memory
 */
-void vm_reset()
+void vm_reset(void)
 {
 	auxptr = 0;
 	using_aux = 0;

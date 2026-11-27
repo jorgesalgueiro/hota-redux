@@ -49,14 +49,14 @@ short get_sprite_data_word(int entry, int i);
 void set_sprite_data_word(int entry, int i, short value);
 unsigned char get_sprite_data_byte(int entry, int i);
 void set_sprite_data_byte(int entry, int i, unsigned char value);
-void reset_sprite_list();
+void reset_sprite_list(void);
 void move_sprite_by(int sprite, int dx, int dy);
 void flip_sprite(int sprite);
 void mirror_sprite(int sprite);
 void unmirror_sprite(int sprite);
 void remove_sprite(int var);
 void render_sprite(int list_entry);
-void draw_sprites();
+void draw_sprites(void);
 
 int quickload_sprites(FILE *fp);
 int quicksave_sprites(FILE *fp);

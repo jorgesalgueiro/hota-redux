@@ -17,6 +17,11 @@
 FILE *hota_fopen(const char *path, const char *mode);
 int hota_file_readable(const char *path);
 
+/** Atomically replaces destination with source (best effort).
+    @returns 0 on success, negative on error
+*/
+int hota_replace_file(const char *source, const char *destination);
+
 /** Re-parses the Windows command line as UTF-8.
     The C runtime converts argv to the ANSI code page, which loses or
     corrupts non-ASCII paths. The caller keeps using the returned array
@@ -32,6 +37,7 @@ char **hota_utf8_argv(int *argc);
 
 #define hota_fopen fopen
 #define hota_file_readable(path) (access((path), R_OK) == 0)
+#define hota_replace_file(source, destination) rename((source), (destination))
 
 #endif
 

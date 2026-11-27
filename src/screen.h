@@ -1,15 +1,15 @@
 #ifndef __SCREEN_INCLUDED__
 #define __SCREEN_INCLUDED__
 
-int screen_init();
+int screen_init(void);
 
 /** Clears all virtual screens and returns to the initial buffer layout.
     Called when a room is loaded so no stale image can be displayed by
     the first buffer flip of the new room. */
 void screen_clear_all(void);
 
-int get_selected_screen();
-char *get_selected_screen_ptr();
+int get_selected_screen(void);
+char *get_selected_screen_ptr(void);
 
 void select_screen(int which);
 void update_screen(int which);

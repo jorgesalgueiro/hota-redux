@@ -85,6 +85,8 @@ int fastest_flag = 0;
 int check_keys_flag = 0;
 int version_flag = 0;
 int frames_limit = -1;
+int quicksave_test_flag = 0;
+int quickload_test_flag = 0;
 static long frames_done = 0;
 int skip_password_flag = 1;
 int integer_scale_flag = -1; /* -1 = use video.cfg, 0/1 = command line */
@@ -127,10 +129,20 @@ static Uint64 last_tick = 0, last_tick_fp = 0;
 /** Optional alternate key bindings file (--keys). */
 static const char *keymap_filename = "keys.txt";
 
-/* 3 bytes header + 256 global variables + aux variables + task state +
- * sprite state */
-#define QUICKSAVE_SIZE (3L + 256*2L + MAX_TASKS*32*2L + MAX_TASKS*4*2L + \
-	MAX_SPRITES*16L + 3L)
+/* 3 bytes payload header + 256 global variables + aux variables + task
+ * state + sprite state */
+#define QUICKSAVE_PAYLOAD_SIZE (3L + 256*2L + MAX_TASKS*32*2L + \
+	MAX_TASKS*4*2L + MAX_SPRITES*16L + 3L)
+
+#define QUICKSAVE_MAGIC "HOTA"
+#define QUICKSAVE_FORMAT_VERSION 1
+#define QUICKSAVE_HEADER_SIZE 10L
+#define QUICKSAVE_FILE_SIZE (QUICKSAVE_HEADER_SIZE + QUICKSAVE_PAYLOAD_SIZE)
+static char *QUICKSAVE_TMP_FILENAME = "quicksave.tmp";
+
+#define RECORDED_KEYS_MAGIC "HOTK"
+#define RECORDED_KEYS_FORMAT_VERSION 1
+#define RECORDED_KEYS_HEADER_SIZE 6L
 
 #define RECORDED_KEYS_CACHE 4096
 static int cached_keys_offset = 0;
@@ -175,7 +187,7 @@ static int load_room(int index)
 
 /** atexit() callback
 */
-static void atexit_callback()
+static void atexit_callback(void)
 {
 	if (gamepad != NULL)
 	{
@@ -197,7 +209,7 @@ static void atexit_callback()
 	}
 }
 
-static int initialize()
+static int initialize(void)
 {
 	if (!SDL_Init(SDL_INIT_VIDEO))
 	{
@@ -298,16 +310,126 @@ int load_room_screen(int room, int index)
 	return 0;
 }
 
+/** Writes a 32-bit big-endian value. */
+static void fput32(FILE *fp, unsigned long value)
+{
+	fputc((int)((value >> 24) & 0xff), fp);
+	fputc((int)((value >> 16) & 0xff), fp);
+	fputc((int)((value >> 8) & 0xff), fp);
+	fputc((int)(value & 0xff), fp);
+}
+
+/** Reads a 32-bit big-endian value, returning 0 on a short read. */
+static unsigned long fget32(FILE *fp)
+{
+	int a = fgetc(fp);
+	int b = fgetc(fp);
+	int c = fgetc(fp);
+	int d = fgetc(fp);
+
+	if (a == EOF || b == EOF || c == EOF || d == EOF)
+	{
+		return 0;
+	}
+
+	return ((unsigned long)a << 24) | ((unsigned long)b << 16) |
+		((unsigned long)c << 8) | (unsigned long)d;
+}
+
+/** Writes the recorded-keys magic/version header. */
+static void write_recorded_keys_header(FILE *fp)
+{
+	fwrite(RECORDED_KEYS_MAGIC, 1, 4, fp);
+	fputw(RECORDED_KEYS_FORMAT_VERSION, fp);
+}
+
+/** Reads the recorded-keys header.
+
+    Returns 1 when a valid version 1 header was consumed, 0 when the file
+    is a legacy raw recording (the read position is rewound), and -1 when
+    the header is present but malformed.
+*/
+static int read_recorded_keys_header(FILE *fp)
+{
+	char magic[4];
+	size_t got;
+
+	got = fread(magic, 1, sizeof(magic), fp);
+	if (got < sizeof(magic))
+	{
+		fseek(fp, 0, SEEK_SET);
+		return 0;
+	}
+
+	if (memcmp(magic, RECORDED_KEYS_MAGIC, sizeof(magic)) != 0)
+	{
+		fseek(fp, 0, SEEK_SET);
+		return 0;
+	}
+
+	if (fgetw(fp) != RECORDED_KEYS_FORMAT_VERSION)
+	{
+		return -1;
+	}
+
+	return 1;
+}
+
+/** Writes the quicksave magic/version/size header. */
+static void write_quicksave_header(FILE *fp)
+{
+	fwrite(QUICKSAVE_MAGIC, 1, 4, fp);
+	fputw(QUICKSAVE_FORMAT_VERSION, fp);
+	fput32(fp, (unsigned long)QUICKSAVE_PAYLOAD_SIZE);
+}
+
+/** Validates and consumes the quicksave header.
+
+    Returns 1 for the current format, 0 for a legacy headerless save (the
+    read position is rewound) and -1 for a malformed current-format save.
+*/
+static int read_quicksave_header(FILE *fp, long file_size)
+{
+	char magic[4];
+	size_t got;
+	int version;
+	unsigned long payload;
+
+	got = fread(magic, 1, sizeof(magic), fp);
+	if (got < sizeof(magic))
+	{
+		fseek(fp, 0, SEEK_SET);
+		return 0;
+	}
+
+	if (memcmp(magic, QUICKSAVE_MAGIC, sizeof(magic)) != 0)
+	{
+		fseek(fp, 0, SEEK_SET);
+		return 0;
+	}
+
+	version = fgetw(fp);
+	payload = fget32(fp);
+	if (version != QUICKSAVE_FORMAT_VERSION ||
+		payload != (unsigned long)QUICKSAVE_PAYLOAD_SIZE ||
+		file_size != (long)(QUICKSAVE_HEADER_SIZE + (long)payload))
+	{
+		return -1;
+	}
+
+	return 1;
+}
+
 /** Rewinds (clears) the recorded-keys cache
 */
-void rewind_recorded_keys()
+void rewind_recorded_keys(void)
 {
 	cached_keys_offset = 0;
 }
 
 /** Writes down all the recored keys, and rewinds
 */
-void flush_recorded_keys()
+void flush_recorded_keys(void)
 {
 	if (record_fp == NULL)
 	{
@@ -324,7 +446,7 @@ void flush_recorded_keys()
     Will read information sufficient for one rendered frame; if the
     record file ended already, all keys will be considered 'released'
 */
-void read_keys_from_record()
+void read_keys_from_record(void)
 {
 	int c;
 
@@ -357,7 +479,7 @@ void read_keys_from_record()
     Adds a key to the cache array of recorded keys; if the array 
     is full, it will force flushing
 */
-void add_keys_to_record()
+void add_keys_to_record(void)
 {
 	if (record_fp == NULL)
 	{
@@ -378,7 +500,7 @@ void add_keys_to_record()
 
     Entry at b6c4
 */
-void update_keys()
+void update_keys(void)
 {
 	short flags;
 	int up, down, left, right, a, b, c, select;
@@ -490,7 +612,7 @@ void update_keys()
 
 /** Loads a quicksave file
 */
-void quickload()
+void quickload(void)
 {
 	int i, j;
 	int palette_used;
@@ -524,12 +646,31 @@ void quickload()
 	}
 
 	file_size = ftell(fp);
-	if (fseek(fp, 0, SEEK_SET) != 0 || file_size != QUICKSAVE_SIZE)
+	if (fseek(fp, 0, SEEK_SET) != 0 || file_size < 0)
 	{
-		fprintf(stderr, "invalid 'quicksave' file (size %ld, expected %ld)\n",
-			file_size, (long)QUICKSAVE_SIZE);
+		perror("failed to read 'quicksave' file\n");
 		fclose(fp);
 		return;
+	}
+
+	{
+		int format = read_quicksave_header(fp, file_size);
+
+		if (format < 0)
+		{
+			fprintf(stderr, "invalid 'quicksave' file header\n");
+			fclose(fp);
+			return;
+		}
+
+		if (format == 0 && file_size != QUICKSAVE_PAYLOAD_SIZE)
+		{
+			fprintf(stderr, "invalid 'quicksave' file (size %ld, expected %ld or %ld)\n",
+				file_size, (long)QUICKSAVE_PAYLOAD_SIZE,
+				(long)QUICKSAVE_FILE_SIZE);
+			fclose(fp);
+			return;
+		}
 	}
 
 	current_room = fgetc(fp);
@@ -588,13 +729,14 @@ void quickload()
 		new_enabled_tasks[i] = fgetw(fp);
 
 		/* A corrupt save must not send the interpreter outside the
-		 * script/memory space, where it would spin forever. */
-		if (task_pc[i] < INVALID_PC || task_pc[i] >= VM_MEMORY_SIZE)
+		 * script/memory space, where it would spin forever. Since
+		 * task_pc is a short, only the lower bound can be invalid. */
+		if (task_pc[i] < INVALID_PC)
 		{
 			task_pc[i] = INVALID_PC;
 		}
 
-		if (new_task_pc[i] < -2 || new_task_pc[i] >= VM_MEMORY_SIZE)
+		if (new_task_pc[i] < -2)
 		{
 			new_task_pc[i] = INVALID_PC;
 		}
@@ -610,7 +752,7 @@ void quickload()
     Quicksave file includes all that is required so later on a user can
     use the quickload and be provided with the exact same game state. 
 */    
-void quicksave()
+void quicksave(void)
 {
 	int i, j;
 	FILE *fp;
@@ -627,12 +769,14 @@ void quicksave()
 		flush_recorded_keys();
 	}
 
-	fp = hota_fopen(QUICKSAVE_FILENAME, "wb");
+	fp = hota_fopen(QUICKSAVE_TMP_FILENAME, "wb");
 	if (fp == NULL)
 	{
 		perror("failed to create 'quicksave' file\n");
 		return;
 	}
+
+	write_quicksave_header(fp);
 
 	fputc(current_room, fp);
 	fputc(current_backdrop, fp);
@@ -667,12 +811,26 @@ void quicksave()
 
 	quicksave_sprites(fp);
 
-	if (ferror(fp))
+	if (ferror(fp) || fflush(fp) != 0)
 	{
 		perror("failed to write 'quicksave' file\n");
+		fclose(fp);
+		remove(QUICKSAVE_TMP_FILENAME);
+		return;
 	}
 
-	fclose(fp);
+	if (fclose(fp) != 0)
+	{
+		perror("failed to close 'quicksave' file\n");
+		remove(QUICKSAVE_TMP_FILENAME);
+		return;
+	}
+
+	if (hota_replace_file(QUICKSAVE_TMP_FILENAME, QUICKSAVE_FILENAME) < 0)
+	{
+		perror("failed to replace 'quicksave' file\n");
+		remove(QUICKSAVE_TMP_FILENAME);
+	}
 }
 
 /** Releases every game key.
@@ -681,7 +839,7 @@ void quicksave()
     were held at that moment are delivered to another window, so without
     this the character would keep walking after alt-tabbing back.
 */
-static void release_all_keys()
+static void release_all_keys(void)
 {
 	key_up = key_down = key_left = key_right = 0;
 	key_a = key_b = key_c = key_select = 0;
@@ -760,7 +918,7 @@ static void poll_gamepad(void)
     This processes windows messages, keyboard pressed, joystick moves,
     and general SDL events
 */
-void check_events()
+void check_events(void)
 {
 	SDL_Event event;
 
@@ -1142,7 +1300,7 @@ void rest(int fps)
 
 /** Initializes all tasks to stopped state
 */
-void init_tasks()
+void init_tasks(void)
 {
 	int i;
 
@@ -1206,7 +1364,7 @@ int play_anm(anm_file_t *anm, int n, int skippable)
     512 KB of ram, and video is loaded into memory before it can be
     played. also, each such sequence comes with it's own audio track
 */
-static void play_intro()
+static void play_intro(void)
 {
 	play_anm(anm_files, 4, 0);
 }
@@ -1215,7 +1373,7 @@ static void play_intro()
 
     This is where all the magic happens!
 */
-static void run()
+static void run(void)
 {
 	cls.quit = 0;
 	init_tasks();
@@ -1260,6 +1418,24 @@ static void run()
 			LOG(("loading room %d\n", current_room));
 			load_room(current_room);
 			next_script = 0;
+
+			if (quicksave_test_flag)
+			{
+				/* deterministic save-format test: the room script
+				 * sets the backdrop on the first frame, so pick
+				 * the first one explicitly */
+				current_backdrop = 1;
+				quicksave();
+				cls.quit = 1;
+				continue;
+			}
+
+			if (quickload_test_flag)
+			{
+				quickload();
+				cls.quit = 1;
+				continue;
+			}
 		}
 
 		check_events();
@@ -1356,7 +1532,7 @@ static void run()
 
 /** Runs the animation-test, enabled with --animation-test
 */
-static void animation_test()
+static void animation_test(void)
 {
 	int files = sizeof(anm_files) / sizeof(anm_files[0]);
 	play_anm(anm_files, files, 1);
@@ -1367,7 +1543,7 @@ static void animation_test()
     Interactively show the sprites in this 'room' file. Use the --room
     parameter to view sprites in other rooms
 */
-void sprite_test()
+void sprite_test(void)
 {
 	int redraw;
 
@@ -1469,7 +1645,7 @@ void sprite_test()
 	}
 }
 
-static void help()
+static void help(void)
 {
 	printf("Heart of The Alien Redux %s\n", HOTA_VERSION);
 	puts("USAGE:");
@@ -1501,6 +1677,8 @@ static void help()
 	puts("\t--record       record keys");
 	puts("\t--replay       replay keys");
 	puts("\t--frames n     run <n> rendered frames, then exit (for tests)");
+	puts("\t--quicksave-test  save once after the first room load, then exit");
+	puts("\t--quickload-test  load the quicksave after the first room load, then exit");
 	puts("\t--version      print the version and exit");
 	puts("\t--help         this help");
 }
@@ -1525,6 +1703,8 @@ static struct parg_option options[] =
 	{"record", PARG_NOARG, &record_flag, 1},
 	{"replay", PARG_NOARG, &replay_flag, 1},
 	{"frames", PARG_REQARG, NULL, 'F'},
+	{"quicksave-test", PARG_NOARG, &quicksave_test_flag, 1},
+	{"quickload-test", PARG_NOARG, &quickload_test_flag, 1},
 	{"version", PARG_NOARG, &version_flag, 1},
 	{"scale", PARG_REQARG, NULL, 's'},
 	{"upscale", PARG_REQARG, NULL, 'u'},
@@ -1795,6 +1975,14 @@ int main(int argc, char **argv)
 			perror("failed to open 'recorded-keys' file for replay");
 			return 1;
 		}
+
+		if (read_recorded_keys_header(record_fp) < 0)
+		{
+			fprintf(stderr, "invalid 'recorded-keys' file header\n");
+			fclose(record_fp);
+			record_fp = NULL;
+			return 1;
+		}
 	}
 	else if (record_flag)
 	{
@@ -1802,6 +1990,15 @@ int main(int argc, char **argv)
 		if (record_fp == NULL)
 		{
 			perror("failed to create 'recorded-keys' file");
+			return 1;
+		}
+
+		write_recorded_keys_header(record_fp);
+		if (ferror(record_fp))
+		{
+			perror("failed to write 'recorded-keys' header");
+			fclose(record_fp);
+			record_fp = NULL;
 			return 1;
 		}
 	}

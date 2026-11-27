@@ -21,30 +21,30 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-int render_init();
-int render_create_surface();
-void render_done();
+int render_init(void);
+int render_create_surface(void);
+void render_done(void);
 
-int get_scroll_register();
+int get_scroll_register(void);
 void set_scroll(int scroll);
 
 void render(unsigned char *src);
-void render_blank();
+void render_blank(void);
 
 void set_palette(int which);
 void set_palette_rgb12(unsigned char *rgb12);
 
-void toggle_fullscreen();
-void toggle_upscale();
-void toggle_scaler();
-void toggle_filter();
-void toggle_integer_scale();
+void toggle_fullscreen(void);
+void toggle_upscale(void);
+void toggle_scaler(void);
+void toggle_filter(void);
+void toggle_integer_scale(void);
 
 int render_set_upscale(int factor);
-int render_get_upscale();
+int render_get_upscale(void);
 
-int get_current_palette();
+int get_current_palette(void);
 
-void screenshot();
+void screenshot(void);
 
 #endif // RENDER_H

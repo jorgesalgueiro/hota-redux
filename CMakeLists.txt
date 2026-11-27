@@ -74,7 +74,7 @@ target_compile_definitions(alien PRIVATE
 if(HOTA_HAVE_OPENGL)
 	target_compile_definitions(alien PRIVATE HAVE_OPENGL)
 endif()
-target_compile_options(alien PRIVATE -Wall) # -Wextra
+target_compile_options(alien PRIVATE -Wall -Wextra -Wstrict-prototypes -Wold-style-definition)
 
 target_link_libraries(alien PRIVATE SDL3::SDL3 SDL3_mixer::SDL3_mixer)
 if(HOTA_HAVE_OPENGL)
@@ -84,10 +84,21 @@ endif()
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+option(HOTA_BUILD_FUZZERS "Build libFuzzer targets (requires clang)" OFF)
+if(HOTA_BUILD_FUZZERS)
+	add_executable(fuzz_unlzss
+		tests/fuzz/fuzz_unlzss.c src/lzss.c src/vm.c src/debug.c)
+	target_include_directories(fuzz_unlzss PRIVATE src)
+	target_compile_options(fuzz_unlzss PRIVATE
+		-g -O1 -fno-omit-frame-pointer -fsanitize=fuzzer,address,undefined)
+	target_link_options(fuzz_unlzss PRIVATE
+		-fsanitize=fuzzer,address,undefined)
+endif()
+
 if(BUILD_TESTING)
 	add_executable(keymap_probe tests/keymap_probe.c src/keymap.c src/platform.c)
 	target_include_directories(keymap_probe PRIVATE src)
-	target_compile_options(keymap_probe PRIVATE -Wall)
+	target_compile_options(keymap_probe PRIVATE -Wall -Wextra -Wstrict-prototypes -Wold-style-definition)
 	target_link_libraries(keymap_probe PRIVATE SDL3::SDL3)
 
 	set(HOTA_TEST_WORK "${CMAKE_CURRENT_BINARY_DIR}/test-work")
@@ -100,6 +111,13 @@ if(BUILD_TESTING)
 	add_test(NAME check-keys-sample COMMAND alien --check-keys --keys "${CMAKE_CURRENT_SOURCE_DIR}/tests/keys-sample.txt")
 	add_test(NAME keymap-probe-default COMMAND keymap_probe)
 	add_test(NAME keymap-probe-sample COMMAND keymap_probe "${CMAKE_CURRENT_SOURCE_DIR}/tests/keys-sample.txt")
+
+	add_executable(unlzss_test
+		tests/unlzss_test.c src/lzss.c src/vm.c src/debug.c)
+	target_include_directories(unlzss_test PRIVATE src)
+	target_compile_options(unlzss_test PRIVATE -Wall -Wextra -Wstrict-prototypes -Wold-style-definition)
+	add_test(NAME unlzss-zero-stream COMMAND unlzss_test)
+	set_tests_properties(unlzss-zero-stream PROPERTIES TIMEOUT 10)
 
 	set_tests_properties(version help frames-invalid check-keys-default
 		check-keys-sample keymap-probe-default keymap-probe-sample
@@ -120,6 +138,16 @@ if(BUILD_TESTING)
 			--fastest --no-sound)
 		set_tests_properties(room1-frames PROPERTIES
 			WORKING_DIRECTORY "${HOTA_TEST_WORK}")
+
+		add_test(NAME quicksave-save COMMAND alien
+			--iso "${HOTA_TEST_ISO}" --room 1 --quicksave-test
+			--fastest --no-sound)
+		add_test(NAME quicksave-load COMMAND alien
+			--iso "${HOTA_TEST_ISO}" --room 1 --quickload-test
+			--fastest --no-sound)
+		set_tests_properties(quicksave-save quicksave-load PROPERTIES
+			WORKING_DIRECTORY "${HOTA_TEST_WORK}")
+		set_tests_properties(quicksave-load PROPERTIES DEPENDS quicksave-save)
 
 		if(WIN32)
 			add_test(NAME suite-windows COMMAND powershell

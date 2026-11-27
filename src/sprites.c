@@ -217,7 +217,7 @@ void set_sprite_data_byte(int entry, int i, unsigned char value)
 	}
 }
 
-void reset_sprite_list()
+void reset_sprite_list(void)
 {
 	int d0;
 
@@ -623,7 +623,7 @@ void render_sprite(int list_entry)
     Sprites are arranged in a linked list of z-order, where each
     has a visibility flag, and a mirror flag
 */
-void draw_sprites()
+void draw_sprites(void)
 {
 	LOG(("draw_sprites"));
 

@@ -12,6 +12,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install SDL build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxrender-dev libxrandr-dev libxi-dev \
+            libxcursor-dev libxfixes-dev libxss-dev libwayland-dev \
+            libxkbcommon-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libdrm-dev libgbm-dev libasound2-dev libudev-dev
+
       - name: Cache SDL
         uses: actions/cache@v4
         with:
@@ -89,6 +98,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install SDL build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libx11-dev libxext-dev libxrender-dev libxrandr-dev libxi-dev \
+            libxcursor-dev libxfixes-dev libxss-dev libwayland-dev \
+            libxkbcommon-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libdrm-dev libgbm-dev libasound2-dev libudev-dev
+
       - name: Cache SDL
         uses: actions/cache@v4
         with:
@@ -133,3 +151,16 @@ jobs:
           ASAN_OPTIONS: detect_leaks=0
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: ctest --test-dir build --output-on-failure
+
+  fuzz:
+    name: Fuzz (LZSS)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run the LZSS fuzzer
+        run: |
+          clang -g -O1 -fsanitize=fuzzer,address,undefined -I src \
+            tests/fuzz/fuzz_unlzss.c src/lzss.c src/vm.c src/debug.c \
+            -o fuzz_unlzss
+          ./fuzz_unlzss -max_total_time=30 -rss_limit_mb=2048

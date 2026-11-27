@@ -63,6 +63,6 @@ void copy_tls_to_global(int dst_index, int src_index, int count);
 
 unsigned char *get_memory_ptr(int offset);
 
-void vm_reset();
+void vm_reset(void);
 
 #endif

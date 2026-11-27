@@ -77,7 +77,7 @@ static void push(int v)
 /** Pops last element from stack
     @returns element
 */
-static int pop()
+static int pop(void)
 {
 	if (stack_ptr <= 0)
 	{
@@ -99,7 +99,7 @@ static int valid_sprite(int entry)
 /** Loads the next byte from script
     @returns value
 */
-unsigned char next_pc()
+unsigned char next_pc(void)
 {
 	unsigned char rv;
 
@@ -111,7 +111,7 @@ unsigned char next_pc()
 /** Loads the next word from script
     @returns value
 */
-unsigned short next_pc_word()
+unsigned short next_pc_word(void)
 {
 	int left, right;
 
@@ -199,7 +199,7 @@ void load_sprite(int index, int list_entry)
 	next_pc();
 }
 
-void op_85()
+void op_85(void)
 {
 	int d0, entry;
 
@@ -223,7 +223,7 @@ void op_85()
 	assert(0);
 }
 
-void collision_against_set()
+void collision_against_set(void)
 {
 	int entry_a1, entry_trg, entry_src;
 	short d2, d3;
@@ -395,7 +395,7 @@ done:
 	set_variable(3, d3);
 }
 
-void op_27()
+void op_27(void)
 {
 	int entry;
 	short d0, d1, d2, d3;
@@ -504,7 +504,7 @@ void op_27()
 	/* passed, all okay */
 }
 
-void op_24()
+void op_24(void)
 {
 	int a3;
 	int d0, d1, d2, d3;
@@ -862,7 +862,7 @@ void op_24()
 	set_variable(4, x1);
 }
 
-void add_sprite()
+void add_sprite(void)
 {
 	int entry_a6, entry_a4;
 	unsigned char p;
@@ -1060,7 +1060,7 @@ static int is_last_frame_in_animation(int entry)
 	return (d0 >= get_byte(a4));
 }
 
-void op_89()
+void op_89(void)
 {
 	int entry, d1, p, flip;
 
@@ -1098,7 +1098,7 @@ void op_89()
 }
 
 /* op_2a: next frame */
-void op_2a()
+void op_2a(void)
 {
 	unsigned long a2, a4;
 	int d0, d1, d2, d3;
@@ -1203,7 +1203,7 @@ void op_2a()
 	//print_hex(&sprites[which][0], 16);
 }
 
-void op_2b()
+void op_2b(void)
 {
 	int d0, d1, d2, d3, entry;
 	int a2, a4;
@@ -1345,7 +1345,7 @@ void op_2b()
 	d0 = d0;
 }
 
-void op_70()
+void op_70(void)
 {
 	int d0, d1, d2, d3;
 	int a2, a4, dummy, entry;
@@ -1520,7 +1520,7 @@ void op_70()
 	goto loc_mainloop;
 }
 
-void new_task()
+void new_task(void)
 {
 	int d0, d1, d2, a2;
 
@@ -1606,7 +1606,7 @@ void new_task()
 	}
 }
 
-void destroy_tasks()
+void destroy_tasks(void)
 {
 	int d0, d1, d2;
 
@@ -1674,9 +1674,12 @@ void destroy_tasks()
 	}
 }
 
+#define MAX_OPCODES_PER_FRAME 1000000
+
 int decode(int current_task, int start_pc)
 {
 	int leave;
+	int opcode_budget = MAX_OPCODES_PER_FRAME;
 	int compare_op;
 	unsigned char opcode;
 	unsigned char var1, var2;
@@ -1696,6 +1699,14 @@ int decode(int current_task, int start_pc)
 	leave = 0;
 	while (leave == 0)
 	{
+		if (opcode_budget-- <= 0)
+		{
+			LOG(("decode: opcode budget exceeded for task %d at pc 0x%x\n",
+				current_task, pc));
+			leave = 1;
+			break;
+		}
+
 		opcode = next_pc();
 
 		mark_opcode(opcode);

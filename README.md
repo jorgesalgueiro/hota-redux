@@ -1,4 +1,4 @@
-# Heart of The Alien Redux 2.0.5.1
+# Heart of The Alien Redux 2.0.6
 
 [![CI](https://github.com/jorgesalgueiro/hota-redux/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgesalgueiro/hota-redux/actions/workflows/ci.yml)
 
@@ -18,8 +18,10 @@ input precision, skipped the password screen by default, fixed the game-over
 Start path and hardened the decoders. **2.0.4** added gamepad support, volume
 and mute, pause on focus loss, a cross-platform launcher, integer scaling and
 remembered window size. **2.0.5** skips the password screen after a game over
-and restarts the level you were playing. **2.0.5.1** is a bug-fix release for
+and restarts the level you were playing. **2.0.5.1** was a bug-fix release for
 animation decoding, quicksave validation and a few undefined-behaviour paths.
+**2.0.6** adds deterministic tests, CI, versioned save/replay formats, a
+fuzzing target and a warning-clean build.
 It was made with the help of **opencode** and **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
@@ -42,7 +44,7 @@ PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
 to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
 I faced some problems, so I started fixing and polishing. One thing led to
-another, and this 2.0.1 / 2.0.5.1 fork is the result: the same game and the same
+another, and this 2.0.1 / 2.0.6 fork is the result: the same game and the same
 Redux engine, with a sharper picture, a documented key binding file, and some
 crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
@@ -132,7 +134,7 @@ Alien* itself remains the work of its original creators — see
 
 ### The easy way (Windows release zip)
 
-1. Unpack `hota-redux-2.0.5.1-win64.zip` into a folder of your choice.
+1. Unpack `hota-redux-2.0.6-win64.zip` into a folder of your choice.
 2. Put your game data next to `alien.exe`, keeping the original names:
 
    ```
@@ -206,6 +208,19 @@ The level 1 password is `BDXF`.
 
 `alien.exe --help` prints the full option list.
 
+The Linux release tar is portable: `alien` and the bundled `libSDL3.so.0` /
+`libSDL3_mixer.so.0` sit at the top level, so no separate SDL installation is
+needed. It also contains `share/applications/alien.desktop` and icons for
+desktop integration.
+
+### Save files
+
+`quicksave` files now carry a small header (magic `HOTA`, format version and
+payload size) and are written to `quicksave.tmp` before an atomic replace, so
+an interrupted save cannot leave a half-written file. Old headerless saves are
+still accepted. Recorded key streams use a `HOTK` header; old raw recordings
+continue to replay.
+
 ## Command-line flags
 
 ### Video
@@ -267,6 +282,8 @@ next to the game. Delete that file to return to automatic sizing. An explicit
 | `--intro-test` | Play every animation and exit when done. |
 | `--sprite-test` | Show the sprites of the current room (combine with `--room`). |
 | `--frames n` | Run exactly `n` rendered frames, then exit (deterministic tests). |
+| `--quicksave-test` | Save once after the first room load, then exit (tests). |
+| `--quickload-test` | Load the quicksave after the first room load, then exit (tests). |
 
 ## Keys
 
@@ -392,9 +409,10 @@ Run the platform-independent checks with CTest:
 ctest --test-dir build --output-on-failure
 ```
 
-This covers `--version`, `--help`, key-file parsing and the keymap probe. The
-full suites also need game data; point CMake at the directory containing
-`Heart Of The Alien (U).iso` when configuring to add them:
+This covers `--version`, `--help`, key-file parsing, the keymap probe and
+the LZSS zero-stream regression. The full suites also need game data; point
+CMake at the directory containing `Heart Of The Alien (U).iso` when
+configuring to add them (including a save/load round-trip):
 
 ```
 cmake -B build -DHOTA_TEST_DATA_DIR="/path/to/game/data"
@@ -409,6 +427,8 @@ ctest --test-dir build --output-on-failure
   same ground plus UTF-8 paths and both launchers.
 - `tests/run-asan.sh` — the same idea under AddressSanitizer and UBSan in WSL,
   using the `dummy` SDL video and audio drivers.
+- `tests/fuzz/fuzz_unlzss.c` — libFuzzer target for the LZSS decoder; see
+  `tests/fuzz/README.md`. CI runs a short pass on every push.
 
 The recorded game-over checks use `--frames 30000` (configurable with
 `-GameOverFrames` / `GAME_OVER_FRAMES`) so they finish deterministically
@@ -489,7 +509,7 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Lior Halphon** — author of the **Omniscale** pixel-art shader (MIT), and
   **hunterk** for the RetroArch GLSL port used in `src/omniscale_shader.h`.
 
-### This 2.0.1 / 2.0.5.1 fork
+### This 2.0.1 / 2.0.6 fork
 
 - **Jorge Salgueiro** — SDL3/OpenGL HD renderer, adjustable Omniscale
   smoothing, key binding system, renderer/screenshot fixes, the bug fixes
@@ -527,20 +547,33 @@ this repository.
 
 ## Changelog
 
-### Unreleased
+### 2.0.6
 
 - Changed: with **Skip password** on, the code-entry screen is now also
   bypassed after the endings (a new game starts at level 1), and the
   game-over fallback never returns to code entry
+- Fixed: an all-zero or corrupt LZSS stream could loop forever in the
+  distance/match decoder; both search loops are now bounded
+- Fixed: the script interpreter now has a per-frame opcode budget, so a
+  corrupt script cannot spin forever inside one frame
+- Changed: quicksave files have a magic/version/size header and are
+  written to a temporary file before an atomic replace; legacy saves are
+  still accepted
+- Changed: recorded-keys files have a magic/version header; legacy raw
+  recordings are still accepted
 - Added: `--version`, backed by a single `VERSION` file used by CMake and
   both launchers
 - Added: `--frames n` for deterministic headless runs; the game-over
   regression checks now use it instead of wall-clock timeouts
+- Added: `--quicksave-test` / `--quickload-test` developer flags and a
+  CTest save/load round-trip
 - Added: CTest integration and a GitHub Actions CI workflow for Linux,
-  Windows and ASan/UBSan builds
+  Windows, ASan/UBSan and a short LZSS fuzzing pass
 - Added: CPack packaging with `.sha256` checksums, `VERSION`, third-party
   notices and `LICENSES/` (SDL3, SDL3_mixer, Omniscale)
 - Added: Linux package desktop file and icons
+- Added: a warning-clean build (`-Wall -Wextra`, strict prototypes and
+  old-style-definition checks)
 
 ### 2.0.5.1
 

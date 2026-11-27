@@ -22,7 +22,7 @@
 /** loads GAME2.BIN file into memory
     @returns 0 on success, negative value on error
 */
-int game2bin_init();
+int game2bin_init(void);
 
 /** copies a chunk from game2bin
     @param dst     address to destination

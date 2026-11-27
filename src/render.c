@@ -103,7 +103,7 @@ static void load_video_config(int *width, int *height, int *integer_scale)
 }
 
 /** Remembers the current windowed size and integer-scaling flag. */
-static void save_video_config()
+static void save_video_config(void)
 {
 	int width = 0;
 	int height = 0;
@@ -137,7 +137,7 @@ static void save_video_config()
 
     Palettes are stored in game2.bin
 */
-int get_current_palette()
+int get_current_palette(void)
 {
 	return current_palette;
 }
@@ -153,7 +153,7 @@ void set_scroll(int scroll)
 /** Returns VSCROLL register value
     @returns vscroll
 */
-int get_scroll_register()
+int get_scroll_register(void)
 {
 	return scroll_reg;
 }
@@ -161,7 +161,7 @@ int get_scroll_register()
 /** Returns the largest integer window scale that fits comfortably on the
     primary display, clamped to a sane range.
 */
-static int get_auto_scale()
+static int get_auto_scale(void)
 {
 	SDL_Rect bounds;
 	SDL_DisplayID display = SDL_GetPrimaryDisplay();
@@ -181,7 +181,7 @@ static int get_auto_scale()
 	return 2;
 }
 
-static void apply_scale_mode()
+static void apply_scale_mode(void)
 {
 	if (texture == NULL)
 	{
@@ -200,7 +200,7 @@ static void apply_scale_mode()
 
 /** Destroys the current output texture and upscaling buffers.
 */
-static void destroy_upscale_objects()
+static void destroy_upscale_objects(void)
 {
 	if (texture != NULL)
 	{
@@ -306,14 +306,14 @@ int render_set_upscale(int factor)
 
 /** Returns the active internal upscaling factor.
 */
-int render_get_upscale()
+int render_get_upscale(void)
 {
 	return upscale_factor;
 }
 
 /** Cycles through 1x, 2x, 3x and 4x upscaling at runtime.
 */
-void toggle_upscale()
+void toggle_upscale(void)
 {
 	int factor;
 
@@ -340,7 +340,7 @@ void toggle_upscale()
 /** Toggles between sharp nearest-neighbor scaling (default) and the
     smoother Scale2x/Scale3x pixel-art filters.
 */
-void toggle_scaler()
+void toggle_scaler(void)
 {
 	if (use_gl)
 	{
@@ -355,7 +355,7 @@ void toggle_scaler()
 }
 
 /** Toggles pixel-perfect integer scaling. */
-void toggle_integer_scale()
+void toggle_integer_scale(void)
 {
 	cls.integer_scale = !cls.integer_scale;
 	LOG(("integer scaling: %s\n", cls.integer_scale ? "on" : "off"));
@@ -373,7 +373,7 @@ void toggle_integer_scale()
 /** Toggles smooth (bilinear) hardware filtering.
     In HD mode this selects the high-quality Omniscale filter.
 */
-void toggle_filter()
+void toggle_filter(void)
 {
 	if (use_gl)
 	{
@@ -554,7 +554,7 @@ void render(unsigned char *src)
     from the previous room can flash for a moment when the next room
     starts (for example when entering the first level).
 */
-void render_blank()
+void render_blank(void)
 {
 	if (use_gl)
 	{
@@ -577,7 +577,7 @@ void render_blank()
 /** Module initializer
     @returns zero on success
 */
-int render_init()
+int render_init(void)
 {
 	return 0;
 }
@@ -627,7 +627,7 @@ void set_palette(int which)
 	//palette_colors[255].b = 255;
 }
 
-void toggle_fullscreen()
+void toggle_fullscreen(void)
 {
 	/* Remember the windowed size before it is replaced by the screen
 	 * dimensions. */
@@ -651,7 +651,7 @@ void toggle_fullscreen()
 	}
 }
 
-int render_create_surface()
+int render_create_surface(void)
 {
 	int window_scale, upscale;
 	int window_width, window_height;
@@ -814,7 +814,7 @@ int render_create_surface()
 
 /** Releases every video resource; safe to call more than once.
 */
-void render_done()
+void render_done(void)
 {
 	save_video_config();
 
@@ -858,7 +858,7 @@ void render_done()
 	}
 }
 
-void screenshot()
+void screenshot(void)
 {
 	SDL_Surface *shot = surface;
 

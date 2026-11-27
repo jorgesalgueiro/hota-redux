@@ -36,6 +36,8 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	int packed;
 	int bitmask, bits_left, d2, d3, d4, d6;
 	int common_distances;
+	int distance_loop = 0;
+	int match_loop = 0;
 	unsigned char *copy_from;
 	unsigned char *out_start = out;
 	unsigned char *out_end = out + LZSS_OUTPUT_SIZE;
@@ -126,8 +128,15 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 
 	d2 = 0;
 	d6 = 1;
+	distance_loop = 0;
 
 	loc_cfac:
+	if (++distance_loop > 16)
+	{
+		/* corrupt stream: the distance code never terminated */
+		return -1;
+	}
+
 	if (bitmask & (1u << bits_left))
 	{
 		goto loc_cfd2;
@@ -174,6 +183,7 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	}
 
 	loc_cfe6:
+	match_loop = 0;
 	bits_left--;
 	if (bits_left < 0)
 	{
@@ -186,6 +196,12 @@ int unlzss(unsigned char *out, int ptr1, int ptr2)
 	d6 = 1;
 
 	loc_cfee:
+	if (++match_loop > 16)
+	{
+		/* corrupt stream: the match length never terminated */
+		return -1;
+	}
+
 	if (bitmask & (1u << bits_left))
 	{
 		/* direct copy */

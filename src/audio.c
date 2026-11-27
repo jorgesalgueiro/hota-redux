@@ -61,7 +61,7 @@ void audio_apply_volumes(void)
 
 /** Stops all 4 channels
 */
-static void stop_all_channels()
+static void stop_all_channels(void)
 {
 	for(int i = 0; i < 4; i++)
 	{
@@ -200,7 +200,7 @@ void play_sample(int index, int volume, int channel)
 /** Initialize audio module
     @returns zero on success, negative value on error
 */
-int audio_init()
+int audio_init(void)
 {
 	if (!MIX_Init())
 	{
@@ -247,12 +247,12 @@ int audio_init()
 
     Releases memory taken by sfx previously played by play_sample()
 */
-void sound_flush_cache()
+void sound_flush_cache(void)
 {
 }
 
 /** callback when game script has been unloaded */
-void audio_done()
+void audio_done(void)
 {
 	if (mixer_initialized == 0)
 	{
@@ -288,7 +288,7 @@ void audio_done()
 }
 
 /** Stops music */
-void stop_music()
+void stop_music(void)
 {
 	if (cls.nosound == 0 && music != NULL)
 	{
@@ -401,6 +401,6 @@ void play_music_track(int track, int loop)
 }
 
 /** Callback after a frame has been rendered */
-void music_update()
+void music_update(void)
 {
 }

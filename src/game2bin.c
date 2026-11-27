@@ -56,7 +56,7 @@ int copy_from_game2bin(void *dst, int offset, int length)
 /** Loads GAME2.BIN file into memory
     @returns 0 on success, negative value on error
 */
-int game2bin_init()
+int game2bin_init(void)
 {
 	if (read_file("GAME2.BIN", game2bin) < 0)
 	{

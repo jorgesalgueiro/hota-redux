@@ -221,7 +221,7 @@ void update_screen(int which)
 /** Returns the identifier of the working-screen
     @returns screen identifier
 */
-int get_selected_screen()
+int get_selected_screen(void)
 {
 	return selected_screen;
 }
@@ -229,7 +229,7 @@ int get_selected_screen()
 /** Returns framebuffer address of working-screen
     @returns pointer to framebuffer 
 */
-char *get_selected_screen_ptr()
+char *get_selected_screen_ptr(void)
 {
 	return selected_screen_ptr;
 }
@@ -249,7 +249,7 @@ void screen_clear_all(void)
 /** Initializes screen module
     @returns zero on success, negative value on error
 */
-int screen_init()
+int screen_init(void)
 {
 	/* screen 1 and 2 share same framebuffer! */
 	screens[0] = (char *)huge_buf + 0;

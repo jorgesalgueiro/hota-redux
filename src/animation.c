@@ -31,10 +31,10 @@
 #include "client.h"
 
 ///////
-void check_events();
+void check_events(void);
 void rest(int fps);
 
-extern void update_keys();
+extern void update_keys(void);
 
 /* used for 4->8 bit conversion */
 static unsigned char dummy[304*192/2];

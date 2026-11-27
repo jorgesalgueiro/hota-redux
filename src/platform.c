@@ -100,6 +100,33 @@ int hota_file_readable(const char *path)
 	return readable;
 }
 
+int hota_replace_file(const char *source, const char *destination)
+{
+	wchar_t *wsrc;
+	wchar_t *wdst;
+	int result;
+
+	if (source == NULL || destination == NULL)
+	{
+		return -1;
+	}
+
+	wsrc = utf8_to_wide(source);
+	wdst = utf8_to_wide(destination);
+	if (wsrc == NULL || wdst == NULL)
+	{
+		free(wsrc);
+		free(wdst);
+		return -1;
+	}
+
+	result = MoveFileExW(wsrc, wdst,
+		MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) ? 0 : -1;
+	free(wsrc);
+	free(wdst);
+	return result;
+}
+
 char **hota_utf8_argv(int *argc)
 {
 	wchar_t **wide_argv;

@@ -23,10 +23,10 @@
 /** Initialize audio module
     @returns zero on success, negative value on error
 */
-int audio_init();
+int audio_init(void);
 
 /** callback when game script has been unloaded */
-void audio_done();
+void audio_done(void);
 
 /** Applies cls.music_volume, cls.sfx_volume and cls.muted to the mixer. */
 void audio_apply_volumes(void);
@@ -35,7 +35,7 @@ void audio_apply_volumes(void);
 
     Releases memory taken by sfx previously played by play_sample()
 */
-void sound_flush_cache();
+void sound_flush_cache(void);
 
 /** Start playing a sample
     @param index     sample identifier
@@ -48,10 +48,10 @@ void sound_flush_cache();
 void play_sample(int index, int volume, int channel);
 
 /** Stops music */
-void stop_music();
+void stop_music(void);
 
 /** Callback after a frame has been rendered */
-void music_update();
+void music_update(void);
 
 /** Plays audio track
     @param track   track to play
