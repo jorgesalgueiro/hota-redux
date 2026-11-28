@@ -572,6 +572,8 @@ this repository.
 - Added: CPack packaging with `.sha256` checksums, `VERSION`, third-party
   notices and `LICENSES/` (SDL3, SDL3_mixer, Omniscale)
 - Added: Linux package desktop file and icons
+- Added: application icon for the Windows executable and Linux desktop,
+  plus Windows file/version metadata
 - Added: a warning-clean build (`-Wall -Wextra`, strict prototypes and
   old-style-definition checks)
 

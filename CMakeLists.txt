@@ -18,6 +18,16 @@ set(PROJECT_BUGREPORT "https://github.com/carstene1ns/hota-redux/issues")
 include(GNUInstallDirs)
 include(CTest)
 
+if(WIN32)
+	enable_language(RC)
+	set(HOTA_VERSION_RC
+		"${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0")
+	configure_file(
+		"${CMAKE_CURRENT_SOURCE_DIR}/src/alien.rc.in"
+		"${CMAKE_CURRENT_BINARY_DIR}/alien.rc"
+		@ONLY)
+endif()
+
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
@@ -69,6 +79,11 @@ add_executable(alien
 	src/sprites.c src/sprites.h
 	src/upscale.c src/upscale.h
 	src/vm.c src/vm.h)
+
+if(WIN32)
+	target_sources(alien PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/alien.rc")
+endif()
+
 target_compile_definitions(alien PRIVATE
 	$<$<CONFIG:Debug>:ENABLE_DEBUG> HOTA_VERSION="${PROJECT_VERSION}")
 if(HOTA_HAVE_OPENGL)
@@ -203,10 +218,11 @@ else()
 	install(PROGRAMS play.sh play.py DESTINATION .)
 	install(DIRECTORY LICENSES DESTINATION .)
 	install(FILES res/alien.desktop DESTINATION share/applications)
-	install(FILES res/icon48.png
-		DESTINATION share/icons/hicolor/48x48/apps RENAME alien.png)
-	install(FILES res/icon96.png
-		DESTINATION share/icons/hicolor/96x96/apps RENAME alien.png)
+	foreach(icon_size 16 24 32 48 64 96 128 256)
+		install(FILES "res/icon${icon_size}.png"
+			DESTINATION "share/icons/hicolor/${icon_size}x${icon_size}/apps"
+			RENAME alien.png)
+	endforeach()
 endif()
 
 set(CPACK_PACKAGE_NAME "hota-redux")
