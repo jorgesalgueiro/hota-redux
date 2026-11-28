@@ -13,8 +13,12 @@ __pycache__/
 /tests/artifacts/
 
 # save game
-quicksave
-quicksave.tmp
+/quicksave
+/quicksave.tmp
+/autosave
+/autosave.tmp
+/save[0-9]
+/save[0-9].tmp
 
 # runtime config and captures
 /keys.txt

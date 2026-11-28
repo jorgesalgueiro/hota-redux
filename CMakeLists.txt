@@ -147,12 +147,14 @@ if(BUILD_TESTING)
 		"Directory containing 'Heart Of The Alien (U).iso'")
 	if(HOTA_TEST_DATA_DIR)
 		set(HOTA_TEST_ISO "${HOTA_TEST_DATA_DIR}/Heart Of The Alien (U)")
+		set(HOTA_TEST_ENV "SDL_VIDEODRIVER=dummy;SDL_AUDIODRIVER=dummy")
 
 		add_test(NAME room1-frames COMMAND alien
 			--iso "${HOTA_TEST_ISO}" --room 1 --frames 600
 			--fastest --no-sound)
 		set_tests_properties(room1-frames PROPERTIES
-			WORKING_DIRECTORY "${HOTA_TEST_WORK}")
+			WORKING_DIRECTORY "${HOTA_TEST_WORK}"
+			ENVIRONMENT "${HOTA_TEST_ENV}")
 
 		add_test(NAME quicksave-save COMMAND alien
 			--iso "${HOTA_TEST_ISO}" --room 1 --quicksave-test
@@ -161,8 +163,32 @@ if(BUILD_TESTING)
 			--iso "${HOTA_TEST_ISO}" --room 1 --quickload-test
 			--fastest --no-sound)
 		set_tests_properties(quicksave-save quicksave-load PROPERTIES
-			WORKING_DIRECTORY "${HOTA_TEST_WORK}")
+			WORKING_DIRECTORY "${HOTA_TEST_WORK}"
+			ENVIRONMENT "${HOTA_TEST_ENV}")
 		set_tests_properties(quicksave-load PROPERTIES DEPENDS quicksave-save)
+
+		add_test(NAME slot2-save COMMAND alien
+			--iso "${HOTA_TEST_ISO}" --room 1 --save-slot 2
+			--fastest --no-sound)
+		add_test(NAME slot2-load COMMAND alien
+			--iso "${HOTA_TEST_ISO}" --room 1 --load-slot 2
+			--fastest --no-sound)
+		set_tests_properties(slot2-save slot2-load PROPERTIES
+			WORKING_DIRECTORY "${HOTA_TEST_WORK}"
+			ENVIRONMENT "${HOTA_TEST_ENV}")
+		set_tests_properties(slot2-load PROPERTIES DEPENDS slot2-save)
+
+		add_test(NAME autosave-write COMMAND alien
+			--iso "${HOTA_TEST_ISO}" --room 1 --frames 60 --no-sound)
+		add_test(NAME autosave-resume COMMAND alien
+			--iso "${HOTA_TEST_ISO}" --frames 30 --no-sound --debug)
+		set_tests_properties(autosave-write autosave-resume PROPERTIES
+			WORKING_DIRECTORY "${HOTA_TEST_WORK}"
+			ENVIRONMENT "${HOTA_TEST_ENV}"
+			TIMEOUT 60)
+		set_tests_properties(autosave-resume PROPERTIES
+			DEPENDS autosave-write
+			PASS_REGULAR_EXPRESSION "resumed last session")
 
 		if(WIN32)
 			add_test(NAME suite-windows COMMAND powershell

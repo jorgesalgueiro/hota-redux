@@ -44,7 +44,9 @@
 #include "platform.h"
 
 static char *QUICKSAVE_FILENAME = "quicksave";
+static char *AUTOSAVE_FILENAME = "autosave";
 static char *RECORDED_KEYS_FILENAME = "recorded-keys";
+#define SAVE_SLOT_COUNT 5
 
 typedef struct anm_file_s
 {
@@ -87,6 +89,9 @@ int version_flag = 0;
 int frames_limit = -1;
 int quicksave_test_flag = 0;
 int quickload_test_flag = 0;
+int new_game_flag = 0;
+int save_slot_test = 0;
+int load_slot_test = 0;
 static long frames_done = 0;
 int skip_password_flag = 1;
 int integer_scale_flag = -1; /* -1 = use video.cfg, 0/1 = command line */
@@ -138,7 +143,6 @@ static const char *keymap_filename = "keys.txt";
 #define QUICKSAVE_FORMAT_VERSION 1
 #define QUICKSAVE_HEADER_SIZE 10L
 #define QUICKSAVE_FILE_SIZE (QUICKSAVE_HEADER_SIZE + QUICKSAVE_PAYLOAD_SIZE)
-static char *QUICKSAVE_TMP_FILENAME = "quicksave.tmp";
 
 #define RECORDED_KEYS_MAGIC "HOTK"
 #define RECORDED_KEYS_FORMAT_VERSION 1
@@ -610,19 +614,128 @@ void update_keys(void)
 	}
 }
 
-/** Loads a quicksave file
+/** Returns the filename for a save slot. Slot 1 keeps the historical
+    'quicksave' name so existing saves keep working.
 */
-void quickload(void)
+static const char *save_slot_filename(int slot)
+{
+	static char filename[32];
+
+	if (slot <= 1)
+	{
+		return QUICKSAVE_FILENAME;
+	}
+
+	snprintf(filename, sizeof(filename), "save%d", slot);
+	return filename;
+}
+
+/** Saves the current game state to filename.
+    @returns 0 on success, negative on error
+*/
+static int save_game_to(const char *filename)
+{
+	int i, j;
+	FILE *fp;
+	char tmp[64];
+
+	if (current_room < 1 || current_room > 8 || current_backdrop < 1)
+	{
+		/* still in the intro, a test screen, or before the first
+		 * screen of a room has been loaded */
+		return -1;
+	}
+
+	if (record_flag)
+	{
+		flush_recorded_keys();
+	}
+
+	snprintf(tmp, sizeof(tmp), "%s.tmp", filename);
+
+	fp = hota_fopen(tmp, "wb");
+	if (fp == NULL)
+	{
+		perror("failed to create save file");
+		return -1;
+	}
+
+	write_quicksave_header(fp);
+
+	fputc(current_room, fp);
+	fputc(current_backdrop, fp);
+	fputc(get_current_palette(), fp);
+
+	/* must be ran out of thread loop, so no active thread */
+	toggle_aux(0);
+	for (i=0; i<256; i++)
+	{
+		fputw(get_variable(i), fp);
+	}
+
+	toggle_aux(1);
+	for (j=0; j<MAX_TASKS; j++)
+	{
+		set_aux_bank(j);
+		for (i=0; i<32; i++)
+		{
+			fputw(get_variable(i), fp);
+		}
+	}
+
+	toggle_aux(0);
+
+	for (i=0; i<MAX_TASKS; i++)
+	{
+		fputw(task_pc[i], fp);
+		fputw(new_task_pc[i], fp);
+		fputw(enabled_tasks[i], fp);
+		fputw(new_enabled_tasks[i], fp);
+	}
+
+	quicksave_sprites(fp);
+
+	if (ferror(fp) || fflush(fp) != 0)
+	{
+		perror("failed to write save file");
+		fclose(fp);
+		remove(tmp);
+		return -1;
+	}
+
+	if (fclose(fp) != 0)
+	{
+		perror("failed to close save file");
+		remove(tmp);
+		return -1;
+	}
+
+	if (hota_replace_file(tmp, filename) < 0)
+	{
+		perror("failed to replace save file");
+		remove(tmp);
+		return -1;
+	}
+
+	return 0;
+}
+
+/** Loads a game state from filename.
+    @param filename       save file to load
+    @param allow_initial  non-zero when called before the first room is loaded
+    @returns 0 on success, negative on error
+*/
+static int load_game_from(const char *filename, int allow_initial)
 {
 	int i, j;
 	int palette_used;
 	long file_size;
 	FILE *fp;
 
-	if (current_room < 1 || current_room > 8)
+	if (!allow_initial && (current_room < 1 || current_room > 8))
 	{
 		/* still in the intro or a test screen */
-		return;
+		return -1;
 	}
 
 	/* the recorded key stream should not lose the frames before the load */
@@ -631,26 +744,26 @@ void quickload(void)
 		flush_recorded_keys();
 	}
 
-	fp = hota_fopen(QUICKSAVE_FILENAME, "rb");
+	fp = hota_fopen(filename, "rb");
 	if (fp == NULL)
 	{
-		perror("failed to load 'quicksave' file\n");
-		return;
+		perror("failed to load save file");
+		return -1;
 	}
 
 	if (fseek(fp, 0, SEEK_END) != 0)
 	{
-		perror("failed to read 'quicksave' file\n");
+		perror("failed to read save file");
 		fclose(fp);
-		return;
+		return -1;
 	}
 
 	file_size = ftell(fp);
 	if (fseek(fp, 0, SEEK_SET) != 0 || file_size < 0)
 	{
-		perror("failed to read 'quicksave' file\n");
+		perror("failed to read save file");
 		fclose(fp);
-		return;
+		return -1;
 	}
 
 	{
@@ -658,18 +771,16 @@ void quickload(void)
 
 		if (format < 0)
 		{
-			fprintf(stderr, "invalid 'quicksave' file header\n");
+			fprintf(stderr, "invalid save file header: %s\n", filename);
 			fclose(fp);
-			return;
+			return -1;
 		}
 
 		if (format == 0 && file_size != QUICKSAVE_PAYLOAD_SIZE)
 		{
-			fprintf(stderr, "invalid 'quicksave' file (size %ld, expected %ld or %ld)\n",
-				file_size, (long)QUICKSAVE_PAYLOAD_SIZE,
-				(long)QUICKSAVE_FILE_SIZE);
+			fprintf(stderr, "invalid save file size: %s\n", filename);
 			fclose(fp);
-			return;
+			return -1;
 		}
 	}
 
@@ -679,10 +790,9 @@ void quickload(void)
 
 	if (current_room < 1 || current_room > 8 || current_backdrop < 1)
 	{
-		fprintf(stderr, "invalid 'quicksave' file (room %d, backdrop %d)\n",
-			current_room, current_backdrop);
+		fprintf(stderr, "invalid save file room/backdrop: %s\n", filename);
 		fclose(fp);
-		return;
+		return -1;
 	}
 
 	last_level = current_room;
@@ -693,10 +803,10 @@ void quickload(void)
 	if (load_room(current_room) < 0 ||
 		load_room_screen(0, current_backdrop) < 0)
 	{
-		fprintf(stderr, "failed to load room %d from 'quicksave' file\n",
-			current_room);
+		fprintf(stderr, "failed to load room %d from save file: %s\n",
+			current_room, filename);
 		fclose(fp);
-		return;
+		return -1;
 	}
 
 	set_palette(palette_used);
@@ -745,92 +855,56 @@ void quickload(void)
 	quickload_sprites(fp);
 
 	fclose(fp);
+	return 0;
 }
 
-/** Creates a quicksave file
+/** Loads the quick save (slot 1) */
+void quickload(void)
+{
+	(void)load_game_from(QUICKSAVE_FILENAME, 0);
+}
 
-    Quicksave file includes all that is required so later on a user can
-    use the quickload and be provided with the exact same game state. 
-*/    
+/** Saves the quick save (slot 1) */
 void quicksave(void)
 {
-	int i, j;
-	FILE *fp;
+	(void)save_game_to(QUICKSAVE_FILENAME);
+}
 
-	if (current_room < 1 || current_room > 8 || current_backdrop < 1)
+/** Saves to a numbered slot (1-5).
+    @returns 0 on success, negative on error
+*/
+int save_game_slot(int slot)
+{
+	if (slot < 1 || slot > SAVE_SLOT_COUNT)
 	{
-		/* still in the intro, a test screen, or before the first
-		 * screen of a room has been loaded */
+		return -1;
+	}
+
+	return save_game_to(save_slot_filename(slot));
+}
+
+/** Loads from a numbered slot (1-5).
+    @returns 0 on success, negative on error
+*/
+int load_game_slot(int slot)
+{
+	if (slot < 1 || slot > SAVE_SLOT_COUNT)
+	{
+		return -1;
+	}
+
+	return load_game_from(save_slot_filename(slot), 0);
+}
+
+/** Writes the automatic last-session save, unless this is a test run. */
+void autosave_session(void)
+{
+	if (replay_flag || record_flag || fastest_flag)
+	{
 		return;
 	}
 
-	if (record_flag)
-	{
-		flush_recorded_keys();
-	}
-
-	fp = hota_fopen(QUICKSAVE_TMP_FILENAME, "wb");
-	if (fp == NULL)
-	{
-		perror("failed to create 'quicksave' file\n");
-		return;
-	}
-
-	write_quicksave_header(fp);
-
-	fputc(current_room, fp);
-	fputc(current_backdrop, fp);
-	fputc(get_current_palette(), fp);
-
-	/* must be ran out of thread loop, so no active thread */
-	toggle_aux(0);
-	for (i=0; i<256; i++)
-	{
-		fputw(get_variable(i), fp);
-	}
-
-	toggle_aux(1);
-	for (j=0; j<MAX_TASKS; j++)
-	{
-		set_aux_bank(j);
-		for (i=0; i<32; i++)	
-		{
-			fputw(get_variable(i), fp);
-		}
-	}
-
-	toggle_aux(0);
-
-	for (i=0; i<MAX_TASKS; i++)
-	{
-		fputw(task_pc[i], fp);
-		fputw(new_task_pc[i], fp);
-		fputw(enabled_tasks[i], fp);
-		fputw(new_enabled_tasks[i], fp);
-	}
-
-	quicksave_sprites(fp);
-
-	if (ferror(fp) || fflush(fp) != 0)
-	{
-		perror("failed to write 'quicksave' file\n");
-		fclose(fp);
-		remove(QUICKSAVE_TMP_FILENAME);
-		return;
-	}
-
-	if (fclose(fp) != 0)
-	{
-		perror("failed to close 'quicksave' file\n");
-		remove(QUICKSAVE_TMP_FILENAME);
-		return;
-	}
-
-	if (hota_replace_file(QUICKSAVE_TMP_FILENAME, QUICKSAVE_FILENAME) < 0)
-	{
-		perror("failed to replace 'quicksave' file\n");
-		remove(QUICKSAVE_TMP_FILENAME);
-	}
+	(void)save_game_to(AUTOSAVE_FILENAME);
 }
 
 /** Releases every game key.
@@ -1183,6 +1257,38 @@ void check_events(void)
 			{
 				quickload();
 			}
+			if (keymap_matches(KM_SAVE_SLOT_2, event.key.key, event.key.mod))
+			{
+				(void)save_game_slot(2);
+			}
+			if (keymap_matches(KM_SAVE_SLOT_3, event.key.key, event.key.mod))
+			{
+				(void)save_game_slot(3);
+			}
+			if (keymap_matches(KM_SAVE_SLOT_4, event.key.key, event.key.mod))
+			{
+				(void)save_game_slot(4);
+			}
+			if (keymap_matches(KM_SAVE_SLOT_5, event.key.key, event.key.mod))
+			{
+				(void)save_game_slot(5);
+			}
+			if (keymap_matches(KM_LOAD_SLOT_2, event.key.key, event.key.mod))
+			{
+				(void)load_game_slot(2);
+			}
+			if (keymap_matches(KM_LOAD_SLOT_3, event.key.key, event.key.mod))
+			{
+				(void)load_game_slot(3);
+			}
+			if (keymap_matches(KM_LOAD_SLOT_4, event.key.key, event.key.mod))
+			{
+				(void)load_game_slot(4);
+			}
+			if (keymap_matches(KM_LOAD_SLOT_5, event.key.key, event.key.mod))
+			{
+				(void)load_game_slot(5);
+			}
 			if (keymap_matches(KM_SCREENSHOT, event.key.key, event.key.mod))
 			{
 				screenshot();
@@ -1380,16 +1486,29 @@ static void run(void)
 
 	if (next_script == 0)
 	{
-		/* if no room specified, then follow the original flow:
-		 * first play intro, then jump to code entry script.
-		 */
-		play_intro();
-		/* The code entry screen is a level selector. By default jump
-		 * straight into the first level instead. */
-		next_script = skip_password_flag ? 1 : 7;
+		/* Resume the automatic last-session save when one exists. */
+		if (!new_game_flag && !quicksave_test_flag && !quickload_test_flag &&
+			!save_slot_test && !load_slot_test &&
+			hota_file_readable(AUTOSAVE_FILENAME) &&
+			load_game_from(AUTOSAVE_FILENAME, 1) == 0)
+		{
+			LOG(("resumed last session\n"));
+		}
+		else
+		{
+			/* if no room specified, then follow the original flow:
+			 * first play intro, then jump to code entry script.
+			 */
+			play_intro();
+			/* The code entry screen is a level selector. By default
+			 * jump straight into the first level instead. */
+			next_script = skip_password_flag ? 1 : 7;
+		}
 	}
 
 	rest(0);
+
+	int autosave_countdown = 3600;
 
 	while (cls.quit == 0)
 	{
@@ -1433,6 +1552,21 @@ static void run(void)
 			if (quickload_test_flag)
 			{
 				quickload();
+				cls.quit = 1;
+				continue;
+			}
+
+			if (save_slot_test)
+			{
+				current_backdrop = 1;
+				save_game_slot(save_slot_test);
+				cls.quit = 1;
+				continue;
+			}
+
+			if (load_slot_test)
+			{
+				load_game_slot(load_slot_test);
 				cls.quit = 1;
 				continue;
 			}
@@ -1526,8 +1660,16 @@ static void run(void)
 			continue;
 		}
 
+		if (--autosave_countdown <= 0)
+		{
+			autosave_countdown = 3600;
+			autosave_session();
+		}
+
 		rest(12);
 	}
+
+	autosave_session();
 }
 
 /** Runs the animation-test, enabled with --animation-test
@@ -1679,6 +1821,9 @@ static void help(void)
 	puts("\t--frames n     run <n> rendered frames, then exit (for tests)");
 	puts("\t--quicksave-test  save once after the first room load, then exit");
 	puts("\t--quickload-test  load the quicksave after the first room load, then exit");
+	puts("\t--save-slot n  save to slot 1-5 after the first room load (tests)");
+	puts("\t--load-slot n  load slot 1-5 after the first room load (tests)");
+	puts("\t--new-game     ignore the automatic last-session save");
 	puts("\t--version      print the version and exit");
 	puts("\t--help         this help");
 }
@@ -1705,6 +1850,9 @@ static struct parg_option options[] =
 	{"frames", PARG_REQARG, NULL, 'F'},
 	{"quicksave-test", PARG_NOARG, &quicksave_test_flag, 1},
 	{"quickload-test", PARG_NOARG, &quickload_test_flag, 1},
+	{"save-slot", PARG_REQARG, NULL, 'j'},
+	{"load-slot", PARG_REQARG, NULL, 'l'},
+	{"new-game", PARG_NOARG, &new_game_flag, 1},
 	{"version", PARG_NOARG, &version_flag, 1},
 	{"scale", PARG_REQARG, NULL, 's'},
 	{"upscale", PARG_REQARG, NULL, 'u'},
@@ -1814,7 +1962,7 @@ int main(int argc, char **argv)
 	struct parg_state ps;
 	parg_init(&ps);
 	int c;
-	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:k:S:M:V:F:", options, NULL)) != -1)
+	while ((c = parg_getopt_long(&ps, argc, argv, "hdr:ns:fi::m:k:S:M:V:F:j:l:", options, NULL)) != -1)
 	{
 		switch(c)
 		{
@@ -1903,6 +2051,26 @@ int main(int argc, char **argv)
 			if (parse_int(ps.optarg, &frames_limit) < 0 || frames_limit <= 0)
 			{
 				fprintf(stderr, "invalid frame count '%s' (must be greater than 0)\n", ps.optarg);
+				return 1;
+			}
+			break;
+
+			case 'j':
+			if (parse_int(ps.optarg, &save_slot_test) < 0 ||
+				save_slot_test < 1 || save_slot_test > SAVE_SLOT_COUNT)
+			{
+				fprintf(stderr, "invalid save slot '%s' (valid: 1-%d)\n",
+					ps.optarg, SAVE_SLOT_COUNT);
+				return 1;
+			}
+			break;
+
+			case 'l':
+			if (parse_int(ps.optarg, &load_slot_test) < 0 ||
+				load_slot_test < 1 || load_slot_test > SAVE_SLOT_COUNT)
+			{
+				fprintf(stderr, "invalid load slot '%s' (valid: 1-%d)\n",
+					ps.optarg, SAVE_SLOT_COUNT);
 				return 1;
 			}
 			break;

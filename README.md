@@ -1,4 +1,4 @@
-# Heart of The Alien Redux 2.0.6
+# Heart of The Alien Redux 2.0.7
 
 [![CI](https://github.com/jorgesalgueiro/hota-redux/actions/workflows/ci.yml/badge.svg)](https://github.com/jorgesalgueiro/hota-redux/actions/workflows/ci.yml)
 
@@ -20,8 +20,9 @@ and mute, pause on focus loss, a cross-platform launcher, integer scaling and
 remembered window size. **2.0.5** skips the password screen after a game over
 and restarts the level you were playing. **2.0.5.1** was a bug-fix release for
 animation decoding, quicksave validation and a few undefined-behaviour paths.
-**2.0.6** adds deterministic tests, CI, versioned save/replay formats, a
-fuzzing target and a warning-clean build.
+**2.0.6** added deterministic tests, CI, versioned save/replay formats, a
+fuzzing target and a warning-clean build. **2.0.7** adds automatic last-session
+resume and five save slots.
 It was made with the help of **opencode** and **DeepSeek**.
 
 > **No game data is included.** You must own the original Sega CD game and
@@ -44,7 +45,7 @@ PC. That search led me to Gil Megidish's **Heart of The Alien Redux**, and later
 to the **2.0.0** SDL3 port. Both are wonderful pieces of work.
 
 I faced some problems, so I started fixing and polishing. One thing led to
-another, and this 2.0.1 / 2.0.6 fork is the result: the same game and the same
+another, and this 2.0.1 / 2.0.7 fork is the result: the same game and the same
 Redux engine, with a sharper picture, a documented key binding file, and some
 crashes and glitches
 removed. The porting, renderer, shader tuning, key binding system, test suite
@@ -97,6 +98,9 @@ Alien* itself remains the work of its original creators — see
   still available with `--no-skip-password` or from the setup screen.
 - **Gamepad support.** Hot-plugged SDL3 controllers work out of the box
   (D-pad/stick, A/B/C, Start, quicksave/quickload shoulders).
+- **Last-session resume and five save slots.** The game writes an automatic
+  save when you leave and resumes it on the next start (`--new-game` starts
+  over). F5/F7 use slot 1; Ctrl+F6..F9 save slots 2-5; Shift+F6..F9 load them.
 - **Volume and mute.** Set music/SFX levels with `--music-volume` and
   `--sfx-volume`, or press <kbd>M</kbd> to mute.
 - **Pause on focus loss.** Alt-tabbing pauses the game instead of letting it
@@ -134,7 +138,7 @@ Alien* itself remains the work of its original creators — see
 
 ### The easy way (Windows release zip)
 
-1. Unpack `hota-redux-2.0.6-win64.zip` into a folder of your choice.
+1. Unpack `hota-redux-2.0.7-win64.zip` into a folder of your choice.
 2. Put your game data next to `alien.exe`, keeping the original names:
 
    ```
@@ -215,10 +219,16 @@ desktop integration.
 
 ### Save files
 
-`quicksave` files now carry a small header (magic `HOTA`, format version and
-payload size) and are written to `quicksave.tmp` before an atomic replace, so
-an interrupted save cannot leave a half-written file. Old headerless saves are
-still accepted. Recorded key streams use a `HOTK` header; old raw recordings
+The game keeps an automatic last-session save in `autosave`; on startup it
+resumes that state unless `--new-game` is passed. Manual saves use five slots:
+slot 1 is `quicksave` (<kbd>F5</kbd>/<kbd>F7</kbd>) and slots 2-5 are `save2`
+to `save5` (<kbd>Ctrl</kbd>+<kbd>F6</kbd>…<kbd>F9</kbd> to save,
+<kbd>Shift</kbd>+<kbd>F6</kbd>…<kbd>F9</kbd> to load).
+
+Save files carry a small `HOTA` header (format version and payload size) and
+are written to a `.tmp` file before an atomic replace, so an interrupted save
+cannot leave a half-written file. Old headerless quicksaves are still
+accepted. Recorded key streams use a `HOTK` header; old raw recordings
 continue to replay.
 
 ## Command-line flags
@@ -271,6 +281,7 @@ next to the game. Delete that file to return to automatic sizing. An explicit
 | `--music-volume n` | Music volume, `0`–`100` (default `100`). |
 | `--sfx-volume n` | Sound-effect volume, `0`–`100` (default `100`). |
 | `--no-sound` | Disable music and sound effects entirely. |
+| `--new-game` | Ignore the automatic last-session save and start a new game. |
 | `--help` | Print the option list and exit. |
 | `--version` | Print the version from `VERSION` and exit. |
 
@@ -284,6 +295,8 @@ next to the game. Delete that file to return to automatic sizing. An explicit
 | `--frames n` | Run exactly `n` rendered frames, then exit (deterministic tests). |
 | `--quicksave-test` | Save once after the first room load, then exit (tests). |
 | `--quickload-test` | Load the quicksave after the first room load, then exit (tests). |
+| `--save-slot n` | Save to slot 1-5 after the first room load, then exit (tests). |
+| `--load-slot n` | Load slot 1-5 after the first room load, then exit (tests). |
 
 ## Keys
 
@@ -294,8 +307,10 @@ available on both `Z`/`X`/`C` and `A`/`S`/`D`:
 - <kbd>X</kbd>/<kbd>S</kbd>  use your whip
 - <kbd>C</kbd>/<kbd>D</kbd>  jump
 - <kbd>Enter</kbd>          start / select (continue and password screens)
-- <kbd>F5</kbd>              quicksave (one slot)
-- <kbd>F7</kbd>              quickload
+- <kbd>F5</kbd>              quicksave to slot 1
+- <kbd>F7</kbd>              quickload from slot 1
+- <kbd>Ctrl</kbd>+<kbd>F6</kbd> … <kbd>F9</kbd>  save to slots 2-5
+- <kbd>Shift</kbd>+<kbd>F6</kbd> … <kbd>F9</kbd> load from slots 2-5
 - <kbd>F2</kbd>              cycle internal upscaling (classic renderer)
 - <kbd>F3</kbd>              toggle sharp / smooth rendering
 - <kbd>F</kbd>               toggle bilinear filtering, or Omniscale in HD mode
@@ -509,7 +524,7 @@ one has been checked and confirmed faulty on the real hardware as well:
 - **Lior Halphon** — author of the **Omniscale** pixel-art shader (MIT), and
   **hunterk** for the RetroArch GLSL port used in `src/omniscale_shader.h`.
 
-### This 2.0.1 / 2.0.6 fork
+### This 2.0.1 / 2.0.7 fork
 
 - **Jorge Salgueiro** — SDL3/OpenGL HD renderer, adjustable Omniscale
   smoothing, key binding system, renderer/screenshot fixes, the bug fixes
@@ -546,6 +561,17 @@ this repository.
 - *Another World* by Éric Chahi: <https://www.anotherworld.fr/>
 
 ## Changelog
+
+### 2.0.7
+
+- Added: automatic last-session save (`autosave`), resumed on the next start;
+  `--new-game` ignores it and starts from the intro
+- Added: five manual save slots. Slot 1 is `quicksave` (<kbd>F5</kbd>/<kbd>F7</kbd>);
+  slots 2-5 are `save2`…`save5` (<kbd>Ctrl</kbd>+<kbd>F6</kbd>…<kbd>F9</kbd>
+  to save, <kbd>Shift</kbd>+<kbd>F6</kbd>…<kbd>F9</kbd> to load)
+- Added: `--save-slot` / `--load-slot` test flags, plus CTest coverage for
+  the numbered slots and the automatic resume path
+- Tests: 45 checks on Windows and 39 on Linux (Ubuntu 24.04)
 
 ### 2.0.6
 
